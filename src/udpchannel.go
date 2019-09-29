@@ -8,7 +8,6 @@ import (
 type UdpChannel struct {
 	Listener *net.UDPConn
 	Sender   *net.UDPConn
-	Ordering *OrderingExtension
 }
 
 func (channel *UdpChannel) SendMessage(message string) {
@@ -20,25 +19,13 @@ func (channel *UdpChannel) SendMessage(message string) {
 }
 
 func (channel *UdpChannel) ReadMessage() []byte {
-
-	if channel.Ordering != nil {
-		message, err := channel.Ordering.PopMessage()
-		if err == "ok" {
-			return message
-		}
-	}
-
 	buffer := make([]byte, 1024)
 	_, error := channel.Listener.Read(buffer)
 	if error != nil {
 		log.Fatal(error)
 	}
 
-	if channel.Ordering != nil {
-		channel.Ordering.AddMessage(string(buffer))
-	}
-
-	return channel.ReadMessage()
+	return buffer
 }
 
 func (channel *UdpChannel) ReadStringMessage() string {
@@ -54,10 +41,6 @@ func CreateChannel(listenerIp string, listenerPort int, senderIp string, senderP
 	channel.Sender = createUdpSender(destinationAddress)
 
 	return &channel
-}
-
-func (channel *UdpChannel) AddOrderingExtension(extension *OrderingExtension) {
-	channel.Ordering = extension
 }
 
 func (channel *UdpChannel) Close() {
