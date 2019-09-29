@@ -32,6 +32,15 @@ func (channel *UdpChannel) ReadStringMessage() string {
 	return string(channel.ReadMessage())
 }
 
+func (channel *UdpChannel) Close() {
+	channel.Sender.Close()
+	channel.Listener.Close()
+}
+
+func (channel *UdpChannel) AddExtension(extension Extension) {
+
+}
+
 func CreateChannel(listenerIp string, listenerPort int, senderIp string, senderPort int) *UdpChannel {
 	sourceAddress := createUdpAddress(listenerIp, listenerPort)
 	destinationAddress := createUdpAddress(senderIp, senderPort)
@@ -41,9 +50,4 @@ func CreateChannel(listenerIp string, listenerPort int, senderIp string, senderP
 	channel.Sender = createUdpSender(destinationAddress)
 
 	return &channel
-}
-
-func (channel *UdpChannel) Close() {
-	channel.Sender.Close()
-	channel.Listener.Close()
 }

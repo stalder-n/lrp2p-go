@@ -8,11 +8,11 @@ func main() {
 	channel1 := CreateChannel("localhost", 3030, "localhost", 3031)
 	channel2 := CreateChannel("localhost", 3031, "localhost", 3030)
 
-	channelPc1 := OrderingExtension{}
-	channelPc2 := OrderingExtension{}
+	var channelPc1 Extension = &OrderingExtension{}
+	var channelPc2 Extension = &OrderingExtension{}
 
-	channelPc1.addChannel(channel1)
-	channelPc2.addChannel(channel2)
+	channelPc1.AddExtension(channel1)
+	channelPc2.AddExtension(channel2)
 
 	var mutex = sync.WaitGroup{}
 	mutex.Add(1)

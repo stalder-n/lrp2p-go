@@ -7,9 +7,9 @@ import (
 )
 
 type OrderingExtension struct {
-	Messages []string
-	Counter  int
-	Channel  *UdpChannel
+	Messages  []string
+	Counter   int
+	Extension Extension
 }
 
 func (ex *OrderingExtension) addMessage(message string) {
@@ -26,7 +26,7 @@ func (ex *OrderingExtension) ReadMessage() []byte {
 		message, ex.Messages = ex.Messages[0], ex.Messages[1:]
 		return []byte(message)
 	} else {
-		ex.addMessage(ex.Channel.ReadStringMessage())
+		ex.addMessage(ex.Extension.ReadStringMessage())
 		return ex.ReadMessage()
 	}
 }
@@ -36,13 +36,13 @@ func (ex *OrderingExtension) ReadStringMessage() string {
 }
 
 func (ex *OrderingExtension) SendMessage(message string) {
-	ex.Channel.SendMessage(message)
+	ex.Extension.SendMessage(message)
 }
 
-func (ex *OrderingExtension) addChannel(channel *UdpChannel) {
-	ex.Channel = channel
+func (channel *OrderingExtension) AddExtension(extension Extension) {
+	channel.Extension = extension
 }
 
 func (ex *OrderingExtension) Close() {
-	ex.Channel.Close()
+	ex.Extension.Close()
 }
