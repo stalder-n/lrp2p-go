@@ -37,7 +37,7 @@ func (channel *UdpChannel) Close() {
 	channel.Listener.Close()
 }
 
-func (channel *UdpChannel) AddExtension(extension Extension) {
+func (channel *UdpChannel) AddExtension(extension *Extension) {
 
 }
 
