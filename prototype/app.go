@@ -1,4 +1,4 @@
-package depracated
+package main
 
 import (
 	"sync"
