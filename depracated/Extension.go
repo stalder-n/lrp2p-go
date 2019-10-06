@@ -1,4 +1,4 @@
-package main
+package depracated
 
 type Extension interface {
 	SendMessage(message string)

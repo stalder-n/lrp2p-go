@@ -1,4 +1,4 @@
-package main
+package depracated
 
 import (
 	"log"
@@ -13,6 +13,7 @@ type UdpChannel struct {
 func (channel *UdpChannel) SendMessage(message string) {
 	bytes := []byte(message)
 	_, error := channel.Sender.Write(bytes)
+
 	if error != nil {
 		log.Fatal(error)
 	}
@@ -20,12 +21,13 @@ func (channel *UdpChannel) SendMessage(message string) {
 
 func (channel *UdpChannel) ReadMessage() []byte {
 	buffer := make([]byte, 1024)
-	_, error := channel.Listener.Read(buffer)
+	n, error := channel.Listener.Read(buffer)
+	buff := buffer[:n]
 	if error != nil {
-		log.Fatal(error)
+		log.Fatal("n: ", n, buff, error)
 	}
 
-	return buffer
+	return buff
 }
 
 func (channel *UdpChannel) ReadStringMessage() string {

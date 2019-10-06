@@ -1,4 +1,4 @@
-package main
+package depracated
 
 type Message struct {
 	Sequencenumber       uint32 // 32 Bit

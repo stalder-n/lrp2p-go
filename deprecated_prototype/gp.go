@@ -38,9 +38,10 @@ func (connection *Connection) Send(str string) {
 
 func (connection *Connection) Receive() string {
 	buffer := make([]byte, SegmentMtu)
-	_, err := connection.receiver.Read(buffer)
+	n, err := connection.receiver.Read(buffer)
+	buff := buffer[:n]
 	handleError(err)
-	seg := createSegment(buffer)
+	seg := createSegment(buff)
 	return seg.getDataAsString()
 }
 
