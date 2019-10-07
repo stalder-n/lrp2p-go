@@ -1,9 +1,7 @@
 package main
 
 type extension interface {
-	openClose
-	Write(buffer []byte)
-	Read() []byte
+	Connector
 	AddExtension(extension *extension)
 }
 

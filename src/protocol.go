@@ -30,13 +30,9 @@ func (connection *Connection) AddExtension(extension *extension) {
 	connection.extension = extension
 }
 
-type openClose interface {
+type Connector interface {
 	Open()
 	Close()
-}
-
-type Connector interface {
-	openClose
 	Write(buffer []byte)
 	Read() []byte
 }
