@@ -1,4 +1,4 @@
-package main
+package protocol
 
 import (
 	"encoding/binary"
@@ -44,7 +44,7 @@ func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
 	binary.BigEndian.PutUint32(buffer[SliceStartSeqNumber:SliceEndSeqNumber], sequenceNumber)
 }
 
-func createDefaultSegment(sequenceNumber uint32, data string) segment {
+func createDefaultSegment(sequenceNumber uint32, data []byte) segment {
 	buffer := make([]byte, HeaderSize+len(data))
 	dataOffset := byte(HeaderSize)
 	setDataOffset(buffer, dataOffset)
