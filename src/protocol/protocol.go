@@ -6,27 +6,27 @@ import (
 	"strconv"
 )
 
-type Connection struct {
+type connection struct {
 	extension extension
 }
 
-func (connection *Connection) Open() {
+func (connection *connection) Open() {
 	connection.extension.Open()
 }
 
-func (connection *Connection) Close() {
+func (connection *connection) Close() {
 	connection.extension.Close()
 }
 
-func (connection *Connection) Write(buffer []byte) {
+func (connection *connection) Write(buffer []byte) {
 	connection.extension.Write(buffer)
 }
 
-func (connection *Connection) Read() []byte {
+func (connection *connection) Read() []byte {
 	return connection.extension.Read()
 }
 
-func (connection *Connection) addExtension(extension extension) {
+func (connection *connection) addExtension(extension extension) {
 	connection.extension = extension
 }
 
@@ -82,14 +82,14 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	return udpAddress
 }
 
-func Connect(connector Connector) Connection {
+func Connect(connector Connector) connection {
 	var adapter extension = &connectorAdapter{connector}
-	return Connection{
+	return connection{
 		extension: adapter,
 	}
 }
 
-func UdpConnect(address string, senderPort, receiverPort int) Connection {
+func UdpConnect(address string, senderPort, receiverPort int) connection {
 	var connector Connector = &udpConnector{
 		senderAddress: address,
 		senderPort:    senderPort,
