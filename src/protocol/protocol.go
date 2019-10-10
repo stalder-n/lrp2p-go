@@ -7,26 +7,26 @@ import (
 )
 
 type Connection struct {
-	extension *extension
+	extension extension
 }
 
 func (connection *Connection) Open() {
-	(*connection.extension).Open()
+	connection.extension.Open()
 }
 
 func (connection *Connection) Close() {
-	(*connection.extension).Close()
+	connection.extension.Close()
 }
 
 func (connection *Connection) Write(buffer []byte) {
-	(*connection.extension).Write(buffer)
+	connection.extension.Write(buffer)
 }
 
 func (connection *Connection) Read() []byte {
-	return (*connection.extension).Read()
+	return connection.extension.Read()
 }
 
-func (connection *Connection) AddExtension(extension *extension) {
+func (connection *Connection) AddExtension(extension extension) {
 	connection.extension = extension
 }
 
@@ -82,10 +82,10 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	return udpAddress
 }
 
-func Connect(connector *Connector) Connection {
+func Connect(connector Connector) Connection {
 	var adapter extension = &connectorAdapter{connector}
 	return Connection{
-		extension: &adapter,
+		extension: adapter,
 	}
 }
 
@@ -95,7 +95,7 @@ func UdpConnect(address string, senderPort, receiverPort int) Connection {
 		senderPort:    senderPort,
 		receiverPort:  receiverPort,
 	}
-	return Connect(&connector)
+	return Connect(connector)
 }
 
 func handleError(err error) {
