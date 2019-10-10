@@ -68,7 +68,7 @@ func (connector *udpConnector) Write(buffer []byte) {
 }
 
 func (connector *udpConnector) Read() []byte {
-	buffer := make([]byte, SegmentMtu)
+	buffer := make([]byte, segmentMtu)
 	n, err := connector.udpReceiver.Read(buffer)
 	handleError(err)
 	return buffer[:n]
