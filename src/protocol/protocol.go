@@ -7,27 +7,7 @@ import (
 )
 
 type connection struct {
-	extension extension
-}
-
-func (connection *connection) Open() {
-	connection.extension.Open()
-}
-
-func (connection *connection) Close() {
-	connection.extension.Close()
-}
-
-func (connection *connection) Write(buffer []byte) {
-	connection.extension.Write(buffer)
-}
-
-func (connection *connection) Read() []byte {
-	return connection.extension.Read()
-}
-
-func (connection *connection) addExtension(extension extension) {
-	connection.extension = extension
+	extensionDelegator
 }
 
 type Connector interface {
@@ -84,9 +64,9 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 
 func Connect(connector Connector) connection {
 	var adapter extension = &connectorAdapter{connector}
-	return connection{
-		extension: adapter,
-	}
+	connection := connection{}
+	connection.addExtension(adapter)
+	return connection
 }
 
 func UdpConnect(address string, senderPort, receiverPort int) connection {
