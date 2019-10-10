@@ -26,7 +26,7 @@ func (connection *Connection) Read() []byte {
 	return connection.extension.Read()
 }
 
-func (connection *Connection) AddExtension(extension extension) {
+func (connection *Connection) addExtension(extension extension) {
 	connection.extension = extension
 }
 
