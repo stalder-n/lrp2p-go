@@ -24,11 +24,11 @@ type segment struct {
 	data           []byte // Payload slice
 }
 
-func (seg segment) getSequenceNumber() uint32 {
+func (seg *segment) getSequenceNumber() uint32 {
 	return binary.BigEndian.Uint32(seg.sequenceNumber)
 }
 
-func (seg segment) getDataAsString() string {
+func (seg *segment) getDataAsString() string {
 	return string(seg.data)
 }
 
