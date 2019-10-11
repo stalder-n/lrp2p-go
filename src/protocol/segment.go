@@ -4,17 +4,17 @@ import (
 	"encoding/binary"
 )
 
-const SegmentMtu = 64
-const HeaderSize = 6
+const segmentMtu = 64
+const headerSize = 6
 
-const IndexDataOffset = 0
-const IndexFlags = 1
+const indexDataOffset = 0
+const indexFlags = 1
 
-const SliceStartSeqNumber = 2
-const SliceEndSeqNumber = 6
+const sliceStartSeqNumber = 2
+const sliceEndSeqNumber = 6
 
-const FlagAck = 1
-const FlagEnd = 2
+const flagAck = 1
+const flagEnd = 2
 
 type segment struct {
 	buffer         []byte
@@ -33,20 +33,20 @@ func (seg segment) getDataAsString() string {
 }
 
 func setDataOffset(buffer []byte, dataOffset byte) {
-	buffer[IndexDataOffset] = dataOffset
+	buffer[indexDataOffset] = dataOffset
 }
 
 func setFlags(buffer []byte, flags byte) {
-	buffer[IndexFlags] = flags
+	buffer[indexFlags] = flags
 }
 
 func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
-	binary.BigEndian.PutUint32(buffer[SliceStartSeqNumber:SliceEndSeqNumber], sequenceNumber)
+	binary.BigEndian.PutUint32(buffer[sliceStartSeqNumber:sliceEndSeqNumber], sequenceNumber)
 }
 
 func createDefaultSegment(sequenceNumber uint32, data []byte) segment {
-	buffer := make([]byte, HeaderSize+len(data))
-	dataOffset := byte(HeaderSize)
+	buffer := make([]byte, headerSize+len(data))
+	dataOffset := byte(headerSize)
 	setDataOffset(buffer, dataOffset)
 	setFlags(buffer, 0)
 	setSequenceNumber(buffer, sequenceNumber)
@@ -55,23 +55,23 @@ func createDefaultSegment(sequenceNumber uint32, data []byte) segment {
 }
 
 func createAckSegment(sequenceNumber uint32) segment {
-	buffer := make([]byte, HeaderSize)
+	buffer := make([]byte, headerSize)
 	setDataOffset(buffer, 0)
-	setFlags(buffer, FlagAck)
+	setFlags(buffer, flagAck)
 	setSequenceNumber(buffer, sequenceNumber)
 	return createSegment(buffer)
 }
 
 func createSegment(buffer []byte) segment {
 	var data []byte = nil
-	if len(buffer) > HeaderSize {
-		data = buffer[buffer[IndexDataOffset]:]
+	if len(buffer) > headerSize {
+		data = buffer[buffer[indexDataOffset]:]
 	}
 	return segment{
 		buffer:         buffer,
-		dataOffset:     &buffer[IndexDataOffset],
-		flags:          &buffer[IndexFlags],
-		sequenceNumber: buffer[SliceStartSeqNumber:SliceEndSeqNumber],
+		dataOffset:     &buffer[indexDataOffset],
+		flags:          &buffer[indexFlags],
+		sequenceNumber: buffer[sliceStartSeqNumber:sliceEndSeqNumber],
 		data:           data,
 	}
 }

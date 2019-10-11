@@ -2,7 +2,7 @@ package protocol
 
 type extension interface {
 	Connector
-	AddExtension(extension extension)
+	addExtension(extension extension)
 }
 
 type connectorAdapter struct {
@@ -28,6 +28,6 @@ func (adapter *connectorAdapter) Read() []byte {
 	return seg.data
 }
 
-func (adapter *connectorAdapter) AddExtension(extension extension) {
+func (adapter *connectorAdapter) addExtension(extension extension) {
 
 }
