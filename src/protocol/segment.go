@@ -13,8 +13,9 @@ const indexFlags = 1
 const sliceStartSeqNumber = 2
 const sliceEndSeqNumber = 6
 
-const flagAck = 1
-const flagEnd = 2
+const flagAck byte = 1
+const flagSyn byte = 2
+const flagEnd byte = 4
 
 type segment struct {
 	buffer         []byte
@@ -22,6 +23,10 @@ type segment struct {
 	flags          *byte  // Flags to mark specific operations
 	sequenceNumber []byte // Sequence number slice
 	data           []byte // Payload slice
+}
+
+func (seg *segment) flaggedAs(flag byte) bool {
+	return *seg.flags&flag == flag
 }
 
 func (seg *segment) getSequenceNumber() uint32 {
