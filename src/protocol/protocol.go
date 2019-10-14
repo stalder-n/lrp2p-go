@@ -64,7 +64,6 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 func Connect(connector Connector) connection {
 	connection := connection{}
 	arq := &goBackNArqExtension{}
-	arq.init()
 	adapter := &connectorAdapter{connector}
 	connection.addExtension(arq)
 	arq.addExtension(adapter)

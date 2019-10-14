@@ -23,8 +23,9 @@ type goBackNArqExtension struct {
 	readMutex          sync.Mutex
 }
 
-func (arq *goBackNArqExtension) init() {
+func (arq *goBackNArqExtension) Open() {
 	arq.segmentWriteBuffer = map[uint32]segment{}
+	arq.extension.Open()
 }
 
 func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
