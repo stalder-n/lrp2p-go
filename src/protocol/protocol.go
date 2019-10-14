@@ -63,13 +63,11 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 
 func Connect(connector Connector) connection {
 	connection := connection{}
-	arqWriter := &goBackNArqWriter{}
-	arqWriter.init()
-	arqReader := &goBackNArqReader{}
+	arq := &goBackNArqExtension{}
+	arq.init()
 	adapter := &connectorAdapter{connector}
-	connection.addExtension(arqWriter)
-	arqWriter.addExtension(arqReader)
-	arqReader.addExtension(adapter)
+	connection.addExtension(arq)
+	arq.addExtension(adapter)
 	return connection
 }
 

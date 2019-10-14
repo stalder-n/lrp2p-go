@@ -15,18 +15,21 @@ func initialSequenceNumber() uint32 {
 	return sequenceNum
 }
 
-type goBackNArqWriter struct {
+type goBackNArqExtension struct {
 	extensionDelegator
-	segmentBuffer map[uint32]segment
-	mutex         sync.Mutex
+	segmentWriteBuffer map[uint32]segment
+	nextSequenceNumber uint32
+	writeMutex         sync.Mutex
+	readMutex          sync.Mutex
 }
 
-func (arq *goBackNArqWriter) init() {
-	arq.segmentBuffer = map[uint32]segment{}
+func (arq *goBackNArqExtension) init() {
+	arq.segmentWriteBuffer = map[uint32]segment{}
 }
 
 func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
 	next := currentIndex + dataChunkSize
+
 	var flag byte = 0
 	if currentIndex == 0 {
 		flag |= flagSyn
@@ -39,9 +42,9 @@ func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segm
 	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
 }
 
-func (arq *goBackNArqWriter) Write(buffer []byte) {
-	arq.mutex.Lock()
-	defer arq.mutex.Unlock()
+func (arq *goBackNArqExtension) Write(buffer []byte) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
 
 	var currentIndex = 0
 	var seg segment
@@ -50,28 +53,21 @@ func (arq *goBackNArqWriter) Write(buffer []byte) {
 		currentIndex, seg = nextSegment(currentIndex, sequenceNumber, buffer)
 		sequenceNumber++
 		arq.extension.Write(seg.buffer)
-		arq.segmentBuffer[seg.getSequenceNumber()] = seg
+		arq.segmentWriteBuffer[seg.getSequenceNumber()] = seg
 		if seg.flaggedAs(flagEnd) {
 			return
 		}
 	}
 }
 
-type goBackNArqReader struct {
-	extensionDelegator
-	segmentBuffer      map[uint32]segment
-	nextSequenceNumber uint32
-	mutex              sync.Mutex
-}
-
-func (arq *goBackNArqReader) writeAck(sequenceNumber uint32) {
+func (arq *goBackNArqExtension) writeAck(sequenceNumber uint32) {
 	ack := createAckSegment(sequenceNumber)
 	arq.extension.Write(ack.buffer)
 }
 
-func (arq *goBackNArqReader) Read() []byte {
-	arq.mutex.Lock()
-	defer arq.mutex.Unlock()
+func (arq *goBackNArqExtension) Read() []byte {
+	arq.readMutex.Lock()
+	defer arq.readMutex.Unlock()
 
 	seg := createSegment(arq.extension.Read())
 
