@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	. "protocol"
 	"sync"
@@ -17,12 +18,11 @@ func main() {
 	var mutex = sync.WaitGroup{}
 	mutex.Add(2)
 	go func() {
-		connection1.Write([]byte("Hello"))
-		fmt.Println("received:", string(connection1.Read()))
+		connection1.Write([]byte("Hello th"))
+		fmt.Println("received:", binary.BigEndian.Uint32(connection1.Read()))
 		mutex.Done()
 	}()
 	go func() {
-		connection2.Write([]byte("World"))
 		fmt.Println("received:", string(connection2.Read()))
 		mutex.Done()
 	}()

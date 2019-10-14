@@ -42,16 +42,12 @@ func (adapter *connectorAdapter) Close() {
 }
 
 func (adapter *connectorAdapter) Write(buffer []byte) {
-	seg := createDefaultSegment(0, buffer)
-	adapter.connector.Write(seg.buffer)
+	adapter.connector.Write(buffer)
 }
 
 func (adapter *connectorAdapter) Read() []byte {
-	buffer := adapter.connector.Read()
-	seg := createSegment(buffer)
-	return seg.data
+	return adapter.connector.Read()
 }
 
 func (adapter *connectorAdapter) addExtension(extension extension) {
-
 }

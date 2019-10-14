@@ -58,14 +58,18 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	address := addressString + ":" + strconv.Itoa(port)
 	udpAddress, err := net.ResolveUDPAddr("udp4", address)
 	handleError(err)
-
 	return udpAddress
 }
 
 func Connect(connector Connector) connection {
-	var adapter extension = &connectorAdapter{connector}
 	connection := connection{}
-	connection.addExtension(adapter)
+	arqWriter := &goBackNArqWriter{}
+	arqWriter.init()
+	arqReader := &goBackNArqReader{}
+	adapter := &connectorAdapter{connector}
+	connection.addExtension(arqWriter)
+	arqWriter.addExtension(arqReader)
+	arqReader.addExtension(adapter)
 	return connection
 }
 

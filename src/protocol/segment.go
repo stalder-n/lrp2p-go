@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 )
 
-const segmentMtu = 64
 const headerSize = 6
 
 const indexDataOffset = 0
@@ -12,6 +11,10 @@ const indexFlags = 1
 
 const sliceStartSeqNumber = 2
 const sliceEndSeqNumber = 6
+const seqNumberLength = sliceEndSeqNumber - sliceStartSeqNumber
+
+const segmentMtu = 64
+const dataChunkSize = segmentMtu - headerSize
 
 const flagAck byte = 1
 const flagSyn byte = 2
@@ -49,22 +52,20 @@ func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
 	binary.BigEndian.PutUint32(buffer[sliceStartSeqNumber:sliceEndSeqNumber], sequenceNumber)
 }
 
-func createDefaultSegment(sequenceNumber uint32, data []byte) segment {
+func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) segment {
 	buffer := make([]byte, headerSize+len(data))
 	dataOffset := byte(headerSize)
 	setDataOffset(buffer, dataOffset)
-	setFlags(buffer, 0)
+	setFlags(buffer, flags)
 	setSequenceNumber(buffer, sequenceNumber)
 	copy(buffer[dataOffset:], data)
 	return createSegment(buffer)
 }
 
 func createAckSegment(sequenceNumber uint32) segment {
-	buffer := make([]byte, headerSize)
-	setDataOffset(buffer, 0)
-	setFlags(buffer, flagAck)
-	setSequenceNumber(buffer, sequenceNumber)
-	return createSegment(buffer)
+	nextSequenceNumber := make([]byte, 4)
+	binary.BigEndian.PutUint32(nextSequenceNumber, sequenceNumber+1)
+	return createFlaggedSegment(sequenceNumber, flagAck, nextSequenceNumber)
 }
 
 func createSegment(buffer []byte) segment {
