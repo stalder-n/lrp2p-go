@@ -12,8 +12,8 @@ func TestQueue_EmptyQueue(t *testing.T) {
 	}
 }
 
-func printTestError(t *testing.T, expected, actual int) {
-	t.Errorf("Expected Dequeue() == %d, was %d", expected, actual)
+func printTestError(t *testing.T, name string, expected, actual int) {
+	t.Errorf("Expected %s() == %d, was %d", name, expected, actual)
 }
 
 func TestQueue_WithMultipleEntries(t *testing.T) {
@@ -28,14 +28,32 @@ func TestQueue_WithMultipleEntries(t *testing.T) {
 
 	actual := q.Dequeue().(int)
 	if actual != 3 {
-		printTestError(t, 3, actual)
+		printTestError(t, "Dequeue", 3, actual)
 	}
 	actual = q.Dequeue().(int)
 	if actual != 5 {
-		printTestError(t, 5, actual)
+		printTestError(t, "Dequeue", 5, actual)
 	}
 	actual = q.Dequeue().(int)
 	if actual != 2 {
-		printTestError(t, 2, actual)
+		printTestError(t, "Dequeue", 2, actual)
+	}
+}
+
+func TestQueue_PeekRemovesNothing(t *testing.T) {
+	q := queue{}
+	q.Enqueue(3)
+
+	if q.IsEmpty() {
+		t.Errorf("Queue with 3 elements shows as empty")
+	}
+
+	actual := q.Peek().(int)
+	if actual != 3 {
+		printTestError(t, "Peek", 3, actual)
+	}
+	actual = q.Dequeue().(int)
+	if actual != 3 {
+		printTestError(t, "Dequeue", 3, actual)
 	}
 }

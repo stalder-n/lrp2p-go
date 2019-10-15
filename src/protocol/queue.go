@@ -28,6 +28,13 @@ func (q *queue) Dequeue() interface{} {
 	return elem.value
 }
 
+func (q *queue) Peek() interface{} {
+	if q.IsEmpty() {
+		return nil
+	}
+	return q.first.value
+}
+
 func (q *queue) IsEmpty() bool {
 	return q.first == nil
 }
