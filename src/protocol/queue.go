@@ -19,6 +19,19 @@ func (q *queue) Enqueue(value interface{}) {
 	}
 }
 
+func (q *queue) PushFront(value interface{}) {
+	newElement := &element{
+		next:  q.first,
+		value: value,
+	}
+	if q.IsEmpty() {
+		q.first = newElement
+		q.last = newElement
+	} else {
+		q.first = newElement
+	}
+}
+
 func (q *queue) Dequeue() interface{} {
 	if q.IsEmpty() {
 		return nil

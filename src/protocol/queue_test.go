@@ -40,6 +40,25 @@ func TestQueue_WithMultipleEntries(t *testing.T) {
 	}
 }
 
+func TestQueue_PushFront(t *testing.T) {
+	q := queue{}
+	q.Enqueue(3)
+	q.PushFront(5)
+
+	if q.IsEmpty() {
+		t.Errorf("Queue with 3 elements shows as empty")
+	}
+
+	actual := q.Dequeue().(int)
+	if actual != 5 {
+		printTestError(t, "Dequeue", 5, actual)
+	}
+	actual = q.Dequeue().(int)
+	if actual != 3 {
+		printTestError(t, "Dequeue", 3, actual)
+	}
+}
+
 func TestQueue_PeekRemovesNothing(t *testing.T) {
 	q := queue{}
 	q.Enqueue(3)
