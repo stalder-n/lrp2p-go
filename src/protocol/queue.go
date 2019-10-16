@@ -1,55 +1,37 @@
 package protocol
 
+import "container/list"
+
 type queue struct {
-	first *element
-	last  *element
+	list list.List
 }
 
 func (q *queue) Enqueue(value interface{}) {
-	newElement := &element{
-		next:  nil,
-		value: value,
-	}
-	if q.IsEmpty() {
-		q.first = newElement
-		q.last = newElement
-	} else {
-		q.last.next = newElement
-		q.last = newElement
-	}
+	q.list.PushBack(value)
 }
 
 func (q *queue) PushFront(value interface{}) {
-	newElement := &element{
-		next:  q.first,
-		value: value,
-	}
-	if q.IsEmpty() {
-		q.first = newElement
-		q.last = newElement
-	} else {
-		q.first = newElement
-	}
+	q.list.PushFront(value)
 }
 
 func (q *queue) Dequeue() interface{} {
 	if q.IsEmpty() {
 		return nil
 	}
-	elem := q.first
-	q.first = elem.next
-	return elem.value
+	elem := q.list.Front()
+	q.list.Remove(elem)
+	return elem.Value
 }
 
 func (q *queue) Peek() interface{} {
 	if q.IsEmpty() {
 		return nil
 	}
-	return q.first.value
+	return q.list.Front().Value
 }
 
 func (q *queue) IsEmpty() bool {
-	return q.first == nil
+	return q.list.Len() == 0
 }
 
 type element struct {
