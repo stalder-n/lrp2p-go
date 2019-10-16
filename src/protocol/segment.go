@@ -19,6 +19,7 @@ const dataChunkSize = segmentMtu - headerSize
 const flagAck byte = 1
 const flagSyn byte = 2
 const flagEnd byte = 4
+const flagAcked byte = 8
 
 type segment struct {
 	buffer         []byte
@@ -36,6 +37,10 @@ func (seg *segment) getSequenceNumber() uint32 {
 	return binary.BigEndian.Uint32(seg.sequenceNumber)
 }
 
+func (seg *segment) getExpectedSequenceNumber() uint32 {
+	return binary.BigEndian.Uint32(seg.data[:seqNumberLength])
+}
+
 func (seg *segment) getDataAsString() string {
 	return string(seg.data)
 }
@@ -48,11 +53,15 @@ func setFlags(buffer []byte, flags byte) {
 	buffer[indexFlags] = flags
 }
 
+func addFlags(buffer []byte, flags byte) {
+	buffer[indexFlags] = buffer[indexFlags] | flags
+}
+
 func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
 	binary.BigEndian.PutUint32(buffer[sliceStartSeqNumber:sliceEndSeqNumber], sequenceNumber)
 }
 
-func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) segment {
+func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segment {
 	buffer := make([]byte, headerSize+len(data))
 	dataOffset := byte(headerSize)
 	setDataOffset(buffer, dataOffset)
@@ -62,18 +71,18 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) segmen
 	return createSegment(buffer)
 }
 
-func createAckSegment(sequenceNumber uint32) segment {
+func createAckSegment(sequenceNumber uint32) *segment {
 	nextSequenceNumber := make([]byte, 4)
 	binary.BigEndian.PutUint32(nextSequenceNumber, sequenceNumber+1)
 	return createFlaggedSegment(sequenceNumber, flagAck, nextSequenceNumber)
 }
 
-func createSegment(buffer []byte) segment {
+func createSegment(buffer []byte) *segment {
 	var data []byte = nil
 	if len(buffer) > headerSize {
 		data = buffer[buffer[indexDataOffset]:]
 	}
-	return segment{
+	return &segment{
 		buffer:         buffer,
 		dataOffset:     &buffer[indexDataOffset],
 		flags:          &buffer[indexFlags],
