@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -11,10 +12,9 @@ type connection struct {
 }
 
 type Connector interface {
+	io.ReadWriter
 	Open()
 	Close()
-	Write(buffer []byte)
-	Read() []byte
 }
 
 type udpConnector struct {
@@ -42,16 +42,12 @@ func (connector *udpConnector) Close() {
 	handleError(receiverError)
 }
 
-func (connector *udpConnector) Write(buffer []byte) {
-	_, err := connector.udpSender.Write(buffer)
-	handleError(err)
+func (connector *udpConnector) Write(buffer []byte) (int, error) {
+	return connector.udpSender.Write(buffer)
 }
 
-func (connector *udpConnector) Read() []byte {
-	buffer := make([]byte, segmentMtu)
-	n, err := connector.udpReceiver.Read(buffer)
-	handleError(err)
-	return buffer[:n]
+func (connector *udpConnector) Read(buffer []byte) (int, error) {
+	return connector.udpReceiver.Read(buffer)
 }
 
 func createUdpAddress(addressString string, port int) *net.UDPAddr {
@@ -61,16 +57,16 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	return udpAddress
 }
 
-func Connect(connector Connector) connection {
-	connection := connection{}
-	arq := &goBackNArqExtension{}
+func Connect(connector Connector) *connection {
+	connection := &connection{}
+	arq := &goBackNArq{}
 	adapter := &connectorAdapter{connector}
 	connection.addExtension(arq)
 	arq.addExtension(adapter)
 	return connection
 }
 
-func UdpConnect(address string, senderPort, receiverPort int) connection {
+func UdpConnect(address string, senderPort, receiverPort int) *connection {
 	var connector Connector = &udpConnector{
 		senderAddress: address,
 		senderPort:    senderPort,

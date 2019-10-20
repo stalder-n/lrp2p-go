@@ -33,8 +33,3 @@ func (q *queue) Peek() interface{} {
 func (q *queue) IsEmpty() bool {
 	return q.list.Len() == 0
 }
-
-type element struct {
-	next  *element
-	value interface{}
-}

@@ -18,13 +18,18 @@ func main() {
 	mutex.Add(2)
 	go func() {
 		connection1.Write([]byte("Hello there world, how's it going?"))
-		mutex.Done()
+		for {
+			buf := make([]byte, 64)
+			connection1.Read(buf)
+			connection1.Write(nil)
+		}
 	}()
 	go func() {
 		for {
-			fmt.Println("received:", string(connection2.Read()))
+			buf := make([]byte, 64)
+			connection2.Read(buf)
+			fmt.Println("received:", string(buf))
 		}
-		//mutex.Done()
 	}()
 
 	mutex.Wait()
