@@ -163,7 +163,7 @@ func (arq *goBackNArq) handleAck(seg *segment) {
 	sequenceNumber := seg.getSequenceNumber()
 	ackedSeg := int(sequenceNumber - arq.initialSequenceNumber)
 	if arq.lastSegmentAcked == ackedSeg {
-		arq.requeueSegments(seg)
+		arq.requeueSegments()
 		arq.window = 0
 	} else if arq.lastSegmentAcked < ackedSeg {
 		arq.window -= ackedSeg - arq.lastSegmentAcked
@@ -171,19 +171,11 @@ func (arq *goBackNArq) handleAck(seg *segment) {
 	}
 }
 
-func (arq *goBackNArq) requeueSegments(ack *segment) {
-	expectedSequenceNumber := ack.getExpectedSequenceNumber()
-	bufferIndex := int(expectedSequenceNumber - arq.initialSequenceNumber)
-	var iter int
-
-	if arq.segmentQueue.IsEmpty() {
-		iter = len(arq.segmentWriteBuffer) - 1
-	} else {
-		nextUnsentSegment := arq.segmentQueue.Peek().(segment)
-		iter = int(nextUnsentSegment.getSequenceNumber() - arq.initialSequenceNumber - 1)
-	}
-	for ; iter >= bufferIndex; iter-- {
-		arq.segmentQueue.PushFront(*arq.segmentWriteBuffer[iter])
+func (arq *goBackNArq) requeueSegments() {
+	for i := len(arq.segmentWriteBuffer) - 1; i > arq.lastSegmentAcked; i-- {
+		if arq.segmentWriteBuffer[i] != nil {
+			arq.segmentQueue.PushFront(*arq.segmentWriteBuffer[i])
+		}
 	}
 }
 
