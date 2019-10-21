@@ -119,31 +119,31 @@ func (arq *goBackNArq) Read(buffer []byte) (int, error) {
 	var err error
 	var seg segment
 
-	for {
-		buf := make([]byte, segmentMtu)
-		n, err = arq.extension.Read(buf)
-		seg = createSegment(buf)
+	buf := make([]byte, segmentMtu)
+	n, err = arq.extension.Read(buf)
+	seg = createSegment(buf)
 
-		if seg.flaggedAs(flagAck) {
-			arq.handleAck(&seg)
-			break
-		}
-
-		if arq.lastInOrderNumber == 0 {
-			if seg.flaggedAs(flagSyn) {
-				arq.lastInOrderNumber = seg.getSequenceNumber()
-			} else {
-				continue
-			}
-		} else if seg.getSequenceNumber() != arq.lastInOrderNumber+1 {
-			arq.writeAck(arq.lastInOrderNumber)
-			continue
-		}
-
-		arq.writeAck(seg.getSequenceNumber())
-		arq.lastInOrderNumber = seg.getSequenceNumber()
-		break
+	if seg.flaggedAs(flagAck) {
+		arq.handleAck(&seg)
+		return 0, &ackReceivedError{}
 	}
+
+	if arq.lastInOrderNumber == 0 {
+		if seg.flaggedAs(flagSyn) {
+			arq.lastInOrderNumber = seg.getSequenceNumber()
+		} else {
+			return 0, &invalidSegmentError{}
+		}
+	} else if seg.getSequenceNumber() != arq.lastInOrderNumber+1 {
+		arq.writeAck(arq.lastInOrderNumber)
+		return 0, &invalidSegmentError{}
+	}
+
+	if seg.flaggedAs(flagEnd) {
+		arq.lastInOrderNumber = 0
+	}
+	arq.writeAck(seg.getSequenceNumber())
+	arq.lastInOrderNumber = seg.getSequenceNumber()
 	copy(buffer, seg.data)
 	return n, err
 }
@@ -183,4 +183,16 @@ type windowFullError struct{}
 
 func (err *windowFullError) Error() string {
 	return "receive window full, can't send more segments"
+}
+
+type ackReceivedError struct{}
+
+func (err *ackReceivedError) Error() string {
+	return "no data received, read ACK segment"
+}
+
+type invalidSegmentError struct{}
+
+func (err *invalidSegmentError) Error() string {
+	return "received out-of-order segment "
 }
