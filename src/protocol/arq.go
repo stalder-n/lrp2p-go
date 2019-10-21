@@ -73,11 +73,18 @@ func (arq *goBackNArq) queueSegments(buffer []byte) {
 	arq.segmentWriteBuffer = make([]*segment, segmentCount)
 }
 
+func (arq *goBackNArq) acksPending() bool {
+	return arq.lastSegmentAcked != -1 && arq.lastSegmentAcked < len(arq.segmentWriteBuffer)-1
+}
+
 func (arq *goBackNArq) Write(buffer []byte) (int, error) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
 
 	if len(buffer) > 0 {
+		if !arq.segmentQueue.IsEmpty() || arq.acksPending() {
+			return 0, &pendingSegmentsError{}
+		}
 		arq.queueSegments(buffer)
 	}
 
@@ -195,5 +202,11 @@ func (err *ackReceivedError) Error() string {
 type invalidSegmentError struct{}
 
 func (err *invalidSegmentError) Error() string {
-	return "received out-of-order segment "
+	return "received out-of-order segment"
+}
+
+type pendingSegmentsError struct{}
+
+func (err *pendingSegmentsError) Error() string {
+	return "not all segments from previous write were sent/ACKed"
 }
