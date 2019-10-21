@@ -13,12 +13,14 @@ const sliceStartSeqNumber = 2
 const sliceEndSeqNumber = 6
 const seqNumberLength = sliceEndSeqNumber - sliceStartSeqNumber
 
-var segmentMtu = 64
-var dataChunkSize = segmentMtu - headerSize
-
 const flagAck byte = 1
 const flagSyn byte = 2
 const flagEnd byte = 4
+
+const defaultSegmentMtu = 64
+
+var segmentMtu = defaultSegmentMtu
+var dataChunkSize = segmentMtu - headerSize
 
 type segment struct {
 	buffer         []byte

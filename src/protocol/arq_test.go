@@ -2,26 +2,99 @@ package protocol
 
 import (
 	"container/list"
-	"os"
+	"github.com/stretchr/testify/assert"
+	"io"
+	"strings"
 	"testing"
 )
 
-var connection1, connection2 *connection
-var arq1, arq2 *goBackNArq
-var manipulator1, manipulator2 *segmentManipulator
+var alphaConnection, betaConnection *connection
+var alphaArq, betaArq *goBackNArq
+var alphaManipulator, betaManipulator2 *segmentManipulator
 var initialSequenceNumberQueue queue
+
+func TestGoBackNArq_SendInOneSegment(t *testing.T) {
+	setup()
+	defer teardown()
+	initialSequenceNumberQueue.Enqueue(uint32(1))
+	message := "Hello, World!"
+	writeBuffer := []byte(message)
+	readBuffer := make([]byte, segmentMtu)
+	write(t, alphaConnection, writeBuffer)
+	read(t, betaConnection, message, readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	assert.Equal(t, 0, alphaArq.lastSegmentAcked)
+}
+
+func TestGoBackNArq_SendSegmentsInOrder(t *testing.T) {
+	setup()
+	defer teardown()
+	initialSequenceNumberQueue.Enqueue(uint32(1))
+	setSegmentMtu(headerSize + 4)
+	message := "testTESTtEsT"
+	writeBuffer := []byte(message)
+	readBuffer := make([]byte, segmentMtu)
+	write(t, alphaConnection, writeBuffer)
+	read(t, betaConnection, "test", readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	read(t, betaConnection, "TEST", readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	read(t, betaConnection, "tEsT", readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	assert.Equal(t, 2, alphaArq.lastSegmentAcked)
+}
+
+func TestGoBackNArq_SendSegmentsOutOfOrder(t *testing.T) {
+	setup()
+	defer teardown()
+	initialSequenceNumberQueue.Enqueue(uint32(1))
+	setSegmentMtu(headerSize + 4)
+	alphaManipulator.dropOnce(2)
+	message := "testTESTtEsT"
+	writeBuffer := []byte(message)
+	readBuffer := make([]byte, segmentMtu)
+	write(t, alphaConnection, writeBuffer)
+	read(t, betaConnection, "test", readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	readExpectError(t, betaConnection, &invalidSegmentError{}, readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	write(t, alphaConnection, nil)
+	read(t, betaConnection, "TEST", readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	read(t, betaConnection, "tEsT", readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	assert.Equal(t, 2, alphaArq.lastSegmentAcked)
+}
+
+func setSegmentMtu(mtu int) {
+	segmentMtu = mtu
+	dataChunkSize = segmentMtu - headerSize
+}
+
+func write(t *testing.T, w io.Writer, data []byte) {
+	_, err := w.Write(data)
+	handleTestError(err, t)
+}
+
+func read(t *testing.T, r io.Reader, expected string, readBuffer []byte) {
+	_, err := r.Read(readBuffer)
+	handleTestError(err, t)
+	assert.Equal(t, expected, strings.TrimRight(string(readBuffer), "\x00"))
+}
+
+func readAck(t *testing.T, r io.Reader, readBuffer []byte) {
+	readExpectError(t, r, &ackReceivedError{}, readBuffer)
+}
+
+func readExpectError(t *testing.T, r io.Reader, expected error, readBuffer []byte) {
+	_, err := r.Read(readBuffer)
+	assert.IsType(t, expected, err)
+}
 
 func handleTestError(err error, t *testing.T) {
 	if err != nil {
 		t.Error("Error occurred:", err.Error())
 	}
-}
-
-func TestMain(m *testing.M) {
-	setup()
-	code := m.Run()
-	shutdown()
-	os.Exit(code)
 }
 
 func setup() {
@@ -32,9 +105,10 @@ func setup() {
 	}
 }
 
-func shutdown() {
-	connection1.Close()
-	connection2.Close()
+func teardown() {
+	alphaConnection.Close()
+	betaConnection.Close()
+	setSegmentMtu(defaultSegmentMtu)
 }
 
 func mockConnections() {
@@ -46,10 +120,10 @@ func mockConnections() {
 		in:  endpoint2,
 		out: endpoint1,
 	}
-	connection1, arq1, manipulator1 = newMockConnection(connector1)
-	connection2, arq2, manipulator2 = newMockConnection(connector2)
-	connection1.Open()
-	connection2.Open()
+	alphaConnection, alphaArq, alphaManipulator = newMockConnection(connector1)
+	betaConnection, betaArq, betaManipulator2 = newMockConnection(connector2)
+	alphaConnection.Open()
+	betaConnection.Open()
 }
 
 func newMockConnection(connector *channelConnector) (*connection, *goBackNArq, *segmentManipulator) {
