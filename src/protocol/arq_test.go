@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 var alphaConnection, betaConnection *connection
@@ -21,6 +22,23 @@ func TestGoBackNArq_SendInOneSegment(t *testing.T) {
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, segmentMtu)
 	write(t, alphaConnection, writeBuffer)
+	read(t, betaConnection, message, readBuffer)
+	readAck(t, alphaConnection, readBuffer)
+	assert.Equal(t, 0, alphaArq.lastSegmentAcked)
+}
+
+func TestGoBackNArq_RetransmissionByTimeout(t *testing.T) {
+	setup()
+	defer teardown()
+	initialSequenceNumberQueue.Enqueue(uint32(1))
+	alphaManipulator.dropOnce(1)
+	retransmissionTimeout = 20 * time.Millisecond
+	message := "Hello, World!"
+	writeBuffer := []byte(message)
+	readBuffer := make([]byte, segmentMtu)
+	write(t, alphaConnection, writeBuffer)
+	time.Sleep(retransmissionTimeout)
+	write(t, alphaConnection, nil)
 	read(t, betaConnection, message, readBuffer)
 	readAck(t, alphaConnection, readBuffer)
 	assert.Equal(t, 0, alphaArq.lastSegmentAcked)

@@ -3,7 +3,10 @@ package protocol
 import (
 	"crypto/rand"
 	"sync"
+	"time"
 )
+
+var retransmissionTimeout = 200 * time.Millisecond
 
 var sequenceNumberFactory = func() uint32 {
 	b := make([]byte, 4)
@@ -18,6 +21,11 @@ var sequenceNumberFactory = func() uint32 {
 
 func initialSequenceNumber() uint32 {
 	return sequenceNumberFactory()
+}
+
+func hasSegmentTimedOut(seg *segment) bool {
+	timeout := seg.timestamp.Add(retransmissionTimeout)
+	return time.Now().After(timeout)
 }
 
 type goBackNArq struct {
@@ -87,9 +95,19 @@ func (arq *goBackNArq) Write(buffer []byte) (int, error) {
 		}
 		arq.queueSegments(buffer)
 	}
-
+	arq.requeueTimedOutSegments()
 	n, err := arq.writeQueuedSegments()
 	return n, err
+}
+
+func (arq *goBackNArq) requeueTimedOutSegments() {
+	if arq.lastSegmentAcked+1 >= len(arq.segmentWriteBuffer) {
+		return
+	}
+	pendingSeg := arq.segmentWriteBuffer[arq.lastSegmentAcked+1]
+	if pendingSeg != nil && hasSegmentTimedOut(pendingSeg) {
+		arq.requeueSegments()
+	}
 }
 
 func (arq *goBackNArq) writeQueuedSegments() (int, error) {
@@ -101,6 +119,7 @@ func (arq *goBackNArq) writeQueuedSegments() (int, error) {
 
 		seg := arq.segmentQueue.Dequeue().(segment)
 		n, err := arq.extension.Write(seg.buffer)
+		seg.timestamp = time.Now()
 
 		if err != nil {
 			return sumN, err

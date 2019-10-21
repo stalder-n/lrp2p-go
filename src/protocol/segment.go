@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"time"
 )
 
 const headerSize = 6
@@ -26,6 +27,7 @@ type segment struct {
 	buffer         []byte
 	sequenceNumber []byte
 	data           []byte
+	timestamp      time.Time
 }
 
 func (seg *segment) dataOffset() byte {
