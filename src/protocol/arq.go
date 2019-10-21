@@ -24,11 +24,11 @@ type goBackNArq struct {
 	extensionDelegator
 	segmentWriteBuffer    []*segment
 	segmentQueue          queue
-	segmentsAcked         int
+	lastSegmentAcked      int
 	initialSequenceNumber uint32
 	lastInOrderNumber     uint32
-	window                uint16
-	windowSize            uint16
+	window                int
+	windowSize            int
 	writeMutex            sync.Mutex
 	readMutex             sync.Mutex
 }
@@ -60,7 +60,7 @@ func (arq *goBackNArq) queueSegments(buffer []byte) {
 	var seg segment
 	var sequenceNumber = initialSequenceNumber()
 	arq.initialSequenceNumber = sequenceNumber
-	arq.segmentsAcked = 0
+	arq.lastSegmentAcked = -1
 	for {
 		currentIndex, seg = nextSegment(currentIndex, sequenceNumber, buffer)
 		arq.segmentQueue.Enqueue(seg)
@@ -129,21 +129,22 @@ func (arq *goBackNArq) Read(buffer []byte) (int, error) {
 	}
 
 	if arq.lastInOrderNumber == 0 {
-		if seg.flaggedAs(flagSyn) {
-			arq.lastInOrderNumber = seg.getSequenceNumber()
-		} else {
+		if !seg.flaggedAs(flagSyn) {
 			return 0, &invalidSegmentError{}
 		}
 	} else if seg.getSequenceNumber() != arq.lastInOrderNumber+1 {
-		arq.writeAck(arq.lastInOrderNumber)
+		if seg.getSequenceNumber() > arq.lastInOrderNumber+1 {
+			arq.writeAck(arq.lastInOrderNumber)
+		}
 		return 0, &invalidSegmentError{}
 	}
 
 	if seg.flaggedAs(flagEnd) {
 		arq.lastInOrderNumber = 0
+	} else {
+		arq.lastInOrderNumber = seg.getSequenceNumber()
 	}
 	arq.writeAck(seg.getSequenceNumber())
-	arq.lastInOrderNumber = seg.getSequenceNumber()
 	copy(buffer, seg.data)
 	return n, err
 }
@@ -154,12 +155,12 @@ func (arq *goBackNArq) handleAck(seg *segment) {
 
 	sequenceNumber := seg.getSequenceNumber()
 	ackedSeg := int(sequenceNumber - arq.initialSequenceNumber)
-	if arq.segmentsAcked > ackedSeg {
+	if arq.lastSegmentAcked == ackedSeg {
 		arq.requeueSegments(seg)
 		arq.window = 0
-	} else {
-		arq.segmentsAcked = ackedSeg + 1
-		arq.window--
+	} else if arq.lastSegmentAcked < ackedSeg {
+		arq.window -= ackedSeg - arq.lastSegmentAcked
+		arq.lastSegmentAcked = ackedSeg
 	}
 }
 
