@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"github.com/stretchr/testify/assert"
 	"io"
-	"strings"
 	"testing"
 	"time"
 )
@@ -95,9 +94,9 @@ func write(t *testing.T, w io.Writer, data []byte) {
 }
 
 func read(t *testing.T, r io.Reader, expected string, readBuffer []byte) {
-	_, err := r.Read(readBuffer)
+	n, err := r.Read(readBuffer)
 	handleTestError(err, t)
-	assert.Equal(t, expected, strings.TrimRight(string(readBuffer), "\x00"))
+	assert.Equal(t, expected, string(readBuffer[:n]))
 }
 
 func readAck(t *testing.T, r io.Reader, readBuffer []byte) {
@@ -194,7 +193,8 @@ func (connector *channelConnector) Write(buffer []byte) (int, error) {
 }
 
 func (connector *channelConnector) Read(buffer []byte) (int, error) {
-	copy(buffer, <-connector.in)
-	return len(buffer), nil
+	buff := <-connector.in
+	copy(buffer, buff)
+	return len(buff), nil
 
 }

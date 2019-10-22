@@ -23,7 +23,7 @@ func main() {
 	}()
 	for {
 		buf := make([]byte, 64)
-		connection2.Read(buf)
-		fmt.Println("received:", string(buf))
+		n, _ := connection2.Read(buf)
+		fmt.Println("received:", string(buf[:n]))
 	}
 }

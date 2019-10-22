@@ -124,7 +124,7 @@ func (arq *goBackNArq) writeQueuedSegments() (int, error) {
 		if err != nil {
 			return sumN, err
 		}
-		sumN += n - headerSize
+		sumN += n - seg.headerSize()
 		arq.segmentWriteBuffer[seg.getSequenceNumber()-arq.initialSequenceNumber] = &seg
 		arq.window++
 	}
@@ -172,7 +172,7 @@ func (arq *goBackNArq) Read(buffer []byte) (int, error) {
 	}
 	arq.writeAck(seg.getSequenceNumber())
 	copy(buffer, seg.data)
-	return n, err
+	return n - seg.headerSize(), err
 }
 
 func (arq *goBackNArq) handleAck(seg *segment) {

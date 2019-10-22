@@ -33,6 +33,11 @@ type segment struct {
 func (seg *segment) dataOffset() byte {
 	return seg.buffer[indexDataOffset]
 }
+
+func (seg *segment) headerSize() int {
+	return int(seg.dataOffset())
+}
+
 func (seg *segment) flags() byte {
 	return seg.buffer[indexFlags]
 }
