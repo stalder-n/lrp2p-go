@@ -179,11 +179,13 @@ type channelConnector struct {
 	out chan []byte
 }
 
-func (connector *channelConnector) Open() {
+func (connector *channelConnector) Open() error {
+	return nil
 }
 
-func (connector *channelConnector) Close() {
+func (connector *channelConnector) Close() error {
 	close(connector.in)
+	return nil
 }
 
 func (connector *channelConnector) Write(buffer []byte) (int, error) {

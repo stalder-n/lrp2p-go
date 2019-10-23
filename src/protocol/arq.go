@@ -40,12 +40,12 @@ type goBackNArq struct {
 	writeMutex            sync.Mutex
 }
 
-func (arq *goBackNArq) Open() {
+func (arq *goBackNArq) Open() error {
 	arq.segmentQueue = queue{}
 	if arq.windowSize == 0 {
 		arq.windowSize = 10
 	}
-	arq.extension.Open()
+	return arq.extension.Open()
 }
 
 func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {

@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"io"
 	"log"
 	"net"
 	"strconv"
@@ -12,9 +11,10 @@ type connection struct {
 }
 
 type Connector interface {
-	io.ReadWriter
-	Open()
-	Close()
+	Read([]byte) (int, error)
+	Write([]byte) (int, error)
+	Open() error
+	Close() error
 }
 
 type udpConnector struct {
@@ -25,21 +25,25 @@ type udpConnector struct {
 	udpReceiver   *net.UDPConn
 }
 
-func (connector *udpConnector) Open() {
+func (connector *udpConnector) Open() error {
 	senderAddress := createUdpAddress(connector.senderAddress, connector.senderPort)
 	receiverAddress := createUdpAddress("localhost", connector.receiverPort)
 	var err error = nil
 	connector.udpSender, err = net.DialUDP("udp4", nil, senderAddress)
-	handleError(err)
+	if err != nil {
+		return err
+	}
 	connector.udpReceiver, err = net.ListenUDP("udp4", receiverAddress)
-	handleError(err)
+	return err
 }
 
-func (connector *udpConnector) Close() {
+func (connector *udpConnector) Close() error {
 	senderError := connector.udpSender.Close()
 	receiverError := connector.udpReceiver.Close()
-	handleError(senderError)
-	handleError(receiverError)
+	if senderError != nil {
+		return senderError
+	}
+	return receiverError
 }
 
 func (connector *udpConnector) Write(buffer []byte) (int, error) {
