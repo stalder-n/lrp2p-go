@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"crypto/rand"
 	"log"
 	"net"
 	"strconv"
+	"time"
 )
 
 type connection struct {
@@ -20,6 +22,28 @@ const (
 	invalidSegment
 	windowFull
 )
+
+var retransmissionTimeout = 200 * time.Millisecond
+
+var sequenceNumberFactory = func() uint32 {
+	b := make([]byte, 4)
+	_, err := rand.Read(b)
+	handleError(err)
+	sequenceNum := bytesToUint32(b)
+	if sequenceNum == 0 {
+		sequenceNum++
+	}
+	return sequenceNum
+}
+
+func initialSequenceNumber() uint32 {
+	return sequenceNumberFactory()
+}
+
+func hasSegmentTimedOut(seg *segment) bool {
+	timeout := seg.timestamp.Add(retransmissionTimeout)
+	return time.Now().After(timeout)
+}
 
 type Connector interface {
 	Read([]byte) (statusCode, int, error)
