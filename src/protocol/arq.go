@@ -38,7 +38,6 @@ type goBackNArq struct {
 	window                int
 	windowSize            int
 	writeMutex            sync.Mutex
-	readMutex             sync.Mutex
 }
 
 func (arq *goBackNArq) Open() {
@@ -138,9 +137,6 @@ func (arq *goBackNArq) writeAck(sequenceNumber uint32) (int, error) {
 }
 
 func (arq *goBackNArq) Read(buffer []byte) (int, error) {
-	arq.readMutex.Lock()
-	defer arq.readMutex.Unlock()
-
 	var n int
 	var err error
 	var seg segment
@@ -165,11 +161,14 @@ func (arq *goBackNArq) Read(buffer []byte) (int, error) {
 		return 0, &invalidSegmentError{}
 	}
 
+	arq.writeMutex.Lock()
 	if seg.flaggedAs(flagEnd) {
 		arq.lastInOrderNumber = 0
 	} else {
 		arq.lastInOrderNumber = seg.getSequenceNumber()
 	}
+	arq.writeMutex.Unlock()
+
 	arq.writeAck(seg.getSequenceNumber())
 	copy(buffer, seg.data)
 	return n - seg.headerSize(), err
