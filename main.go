@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	. "protocol"
-	"sync"
 )
 
 func main() {
@@ -14,18 +13,16 @@ func main() {
 	connection1.Open()
 	connection2.Open()
 
-	var mutex = sync.WaitGroup{}
-	mutex.Add(2)
 	go func() {
-		connection1.Write([]byte("Hello"))
-		fmt.Println("received:", string(connection1.Read()))
-		mutex.Done()
+		connection1.Write([]byte("Hello there world, how's it going?"))
+		for {
+			buf := make([]byte, 64)
+			connection1.Read(buf)
+		}
 	}()
-	go func() {
-		connection2.Write([]byte("World"))
-		fmt.Println("received:", string(connection2.Read()))
-		mutex.Done()
-	}()
-
-	mutex.Wait()
+	for {
+		buf := make([]byte, 64)
+		_, n, _ := connection2.Read(buf)
+		fmt.Println("received:", string(buf[:n]))
+	}
 }

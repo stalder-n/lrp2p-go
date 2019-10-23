@@ -1,40 +1,55 @@
 package protocol
 
 import (
+	"crypto/rand"
 	"log"
 	"net"
 	"strconv"
+	"time"
 )
 
 type connection struct {
-	extension extension
+	extensionDelegator
 }
 
-func (connection *connection) Open() {
-	connection.extension.Open()
+type statusCode int
+
+const (
+	success statusCode = iota
+	fail
+	ackReceived
+	pendingSegments
+	invalidSegment
+	windowFull
+)
+
+var retransmissionTimeout = 200 * time.Millisecond
+
+var sequenceNumberFactory = func() uint32 {
+	b := make([]byte, 4)
+	_, err := rand.Read(b)
+	handleError(err)
+	sequenceNum := bytesToUint32(b)
+	if sequenceNum == 0 {
+		sequenceNum++
+	}
+	return sequenceNum
 }
 
-func (connection *connection) Close() {
-	connection.extension.Close()
+func initialSequenceNumber() uint32 {
+	return sequenceNumberFactory()
 }
 
-func (connection *connection) Write(buffer []byte) {
-	connection.extension.Write(buffer)
-}
-
-func (connection *connection) Read() []byte {
-	return connection.extension.Read()
-}
-
-func (connection *connection) addExtension(extension extension) {
-	connection.extension = extension
+func hasSegmentTimedOut(seg *segment) bool {
+	timeout := seg.timestamp.Add(retransmissionTimeout)
+	return time.Now().After(timeout)
 }
 
 type Connector interface {
-	Open()
-	Close()
-	Write(buffer []byte)
-	Read() []byte
+	Read([]byte) (statusCode, int, error)
+	Write([]byte) (statusCode, int, error)
+	Open() error
+	Close() error
 }
 
 type udpConnector struct {
@@ -45,51 +60,54 @@ type udpConnector struct {
 	udpReceiver   *net.UDPConn
 }
 
-func (connector *udpConnector) Open() {
+func (connector *udpConnector) Open() error {
 	senderAddress := createUdpAddress(connector.senderAddress, connector.senderPort)
 	receiverAddress := createUdpAddress("localhost", connector.receiverPort)
 	var err error = nil
 	connector.udpSender, err = net.DialUDP("udp4", nil, senderAddress)
-	handleError(err)
+	if err != nil {
+		return err
+	}
 	connector.udpReceiver, err = net.ListenUDP("udp4", receiverAddress)
-	handleError(err)
+	return err
 }
 
-func (connector *udpConnector) Close() {
+func (connector *udpConnector) Close() error {
 	senderError := connector.udpSender.Close()
 	receiverError := connector.udpReceiver.Close()
-	handleError(senderError)
-	handleError(receiverError)
+	if senderError != nil {
+		return senderError
+	}
+	return receiverError
 }
 
-func (connector *udpConnector) Write(buffer []byte) {
-	_, err := connector.udpSender.Write(buffer)
-	handleError(err)
+func (connector *udpConnector) Write(buffer []byte) (statusCode, int, error) {
+	n, err := connector.udpSender.Write(buffer)
+	return success, n, err
 }
 
-func (connector *udpConnector) Read() []byte {
-	buffer := make([]byte, segmentMtu)
+func (connector *udpConnector) Read(buffer []byte) (statusCode, int, error) {
 	n, err := connector.udpReceiver.Read(buffer)
-	handleError(err)
-	return buffer[:n]
+	return success, n, err
 }
 
 func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	address := addressString + ":" + strconv.Itoa(port)
 	udpAddress, err := net.ResolveUDPAddr("udp4", address)
 	handleError(err)
-
 	return udpAddress
 }
 
-func Connect(connector Connector) connection {
-	var adapter extension = &connectorAdapter{connector}
-	return connection{
-		extension: adapter,
-	}
+func Connect(connector Connector) *connection {
+	connection := &connection{}
+	arq := &goBackNArq{}
+	adapter := &connectorAdapter{connector}
+	connection.addExtension(arq)
+	arq.addExtension(adapter)
+	return connection
 }
 
-func UdpConnect(address string, senderPort, receiverPort int) connection {
+func UdpConnect(address string, senderPort, receiverPort int) *connection {
 	var connector Connector = &udpConnector{
 		senderAddress: address,
 		senderPort:    senderPort,
