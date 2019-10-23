@@ -17,11 +17,11 @@ func (connection *extensionDelegator) Close() error {
 	return connection.extension.Close()
 }
 
-func (connection *extensionDelegator) Write(buffer []byte) (int, error) {
+func (connection *extensionDelegator) Write(buffer []byte) (statusCode, int, error) {
 	return connection.extension.Write(buffer)
 }
 
-func (connection *extensionDelegator) Read(buffer []byte) (int, error) {
+func (connection *extensionDelegator) Read(buffer []byte) (statusCode, int, error) {
 	return connection.extension.Read(buffer)
 }
 
@@ -41,11 +41,11 @@ func (adapter *connectorAdapter) Close() error {
 	return adapter.connector.Close()
 }
 
-func (adapter *connectorAdapter) Write(buffer []byte) (int, error) {
+func (adapter *connectorAdapter) Write(buffer []byte) (statusCode, int, error) {
 	return adapter.connector.Write(buffer)
 }
 
-func (adapter *connectorAdapter) Read(buffer []byte) (int, error) {
+func (adapter *connectorAdapter) Read(buffer []byte) (statusCode, int, error) {
 	return adapter.connector.Read(buffer)
 }
 

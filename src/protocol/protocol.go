@@ -10,9 +10,20 @@ type connection struct {
 	extensionDelegator
 }
 
+type statusCode int
+
+const (
+	success statusCode = iota
+	fail
+	ackReceived
+	pendingSegments
+	invalidSegment
+	windowFull
+)
+
 type Connector interface {
-	Read([]byte) (int, error)
-	Write([]byte) (int, error)
+	Read([]byte) (statusCode, int, error)
+	Write([]byte) (statusCode, int, error)
 	Open() error
 	Close() error
 }
@@ -46,12 +57,14 @@ func (connector *udpConnector) Close() error {
 	return receiverError
 }
 
-func (connector *udpConnector) Write(buffer []byte) (int, error) {
-	return connector.udpSender.Write(buffer)
+func (connector *udpConnector) Write(buffer []byte) (statusCode, int, error) {
+	n, err := connector.udpSender.Write(buffer)
+	return success, n, err
 }
 
-func (connector *udpConnector) Read(buffer []byte) (int, error) {
-	return connector.udpReceiver.Read(buffer)
+func (connector *udpConnector) Read(buffer []byte) (statusCode, int, error) {
+	n, err := connector.udpReceiver.Read(buffer)
+	return success, n, err
 }
 
 func createUdpAddress(addressString string, port int) *net.UDPAddr {

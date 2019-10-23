@@ -3,7 +3,6 @@ package protocol
 import (
 	"container/list"
 	"github.com/stretchr/testify/suite"
-	"io"
 	"testing"
 	"time"
 )
@@ -25,34 +24,37 @@ func (suite *GoBackNArqTestSuite) SetupTest() {
 }
 
 func (suite *GoBackNArqTestSuite) TearDownTest() {
-	suite.alphaConnection.Close()
-	suite.betaConnection.Close()
+	suite.handleTestError(suite.alphaConnection.Close())
+	suite.handleTestError(suite.betaConnection.Close())
 	setSegmentMtu(defaultSegmentMtu)
 }
 
-func (suite *GoBackNArqTestSuite) write(w io.Writer, data []byte) {
-	_, err := w.Write(data)
+func (suite *GoBackNArqTestSuite) write(c *connection, data []byte) {
+	status, _, err := c.Write(data)
 	suite.handleTestError(err)
+	suite.Equal(success, status)
 }
 
-func (suite *GoBackNArqTestSuite) read(r io.Reader, expected string, readBuffer []byte) {
-	n, err := r.Read(readBuffer)
+func (suite *GoBackNArqTestSuite) read(c *connection, expected string, readBuffer []byte) {
+	status, n, err := c.Read(readBuffer)
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
+	suite.Equal(success, status)
 }
 
-func (suite *GoBackNArqTestSuite) readAck(r io.Reader, readBuffer []byte) {
-	suite.readExpectError(r, &ackReceivedError{}, readBuffer)
+func (suite *GoBackNArqTestSuite) readAck(c *connection, readBuffer []byte) {
+	suite.readExpectStatus(c, ackReceived, readBuffer)
 }
 
-func (suite *GoBackNArqTestSuite) readExpectError(r io.Reader, expected error, readBuffer []byte) {
-	_, err := r.Read(readBuffer)
-	suite.IsType(expected, err)
+func (suite *GoBackNArqTestSuite) readExpectStatus(c *connection, expected statusCode, readBuffer []byte) {
+	status, _, err := c.Read(readBuffer)
+	suite.handleTestError(err)
+	suite.Equal(expected, status)
 }
 
 func (suite *GoBackNArqTestSuite) handleTestError(err error) {
 	if err != nil {
-		suite.T().Error("Error occurred:", err.Error())
+		suite.Errorf(err, "Error occurred")
 	}
 }
 
@@ -67,8 +69,8 @@ func (suite *GoBackNArqTestSuite) mockConnections() {
 	}
 	suite.alphaConnection, suite.alphaArq, suite.alphaManipulator = newMockConnection(connector1)
 	suite.betaConnection, suite.betaArq, suite.betaManipulator2 = newMockConnection(connector2)
-	suite.alphaConnection.Open()
-	suite.betaConnection.Open()
+	suite.handleTestError(suite.alphaConnection.Open())
+	suite.handleTestError(suite.betaConnection.Open())
 }
 
 func (suite *GoBackNArqTestSuite) TestSendInOneSegment() {
@@ -123,7 +125,7 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
 	suite.write(suite.alphaConnection, writeBuffer)
 	suite.read(suite.betaConnection, "test", readBuffer)
 	suite.readAck(suite.alphaConnection, readBuffer)
-	suite.readExpectError(suite.betaConnection, &invalidSegmentError{}, readBuffer)
+	suite.readExpectStatus(suite.betaConnection, invalidSegment, readBuffer)
 	suite.readAck(suite.alphaConnection, readBuffer)
 	suite.write(suite.alphaConnection, nil)
 	suite.read(suite.betaConnection, "TEST", readBuffer)
@@ -163,12 +165,12 @@ func (manipulator *segmentManipulator) dropOnce(sequenceNumber uint32) {
 	manipulator.toDropOnce.PushFront(sequenceNumber)
 }
 
-func (manipulator *segmentManipulator) Write(buffer []byte) (int, error) {
+func (manipulator *segmentManipulator) Write(buffer []byte) (statusCode, int, error) {
 	seg := createSegment(buffer)
 	for elem := manipulator.toDropOnce.Front(); elem != nil; elem = elem.Next() {
 		if elem.Value.(uint32) == seg.getSequenceNumber() {
 			manipulator.toDropOnce.Remove(elem)
-			return len(buffer), nil
+			return success, len(buffer), nil
 		}
 	}
 	return manipulator.extension.Write(buffer)
@@ -188,14 +190,14 @@ func (connector *channelConnector) Close() error {
 	return nil
 }
 
-func (connector *channelConnector) Write(buffer []byte) (int, error) {
+func (connector *channelConnector) Write(buffer []byte) (statusCode, int, error) {
 	connector.out <- buffer
-	return len(buffer), nil
+	return success, len(buffer), nil
 }
 
-func (connector *channelConnector) Read(buffer []byte) (int, error) {
+func (connector *channelConnector) Read(buffer []byte) (statusCode, int, error) {
 	buff := <-connector.in
 	copy(buffer, buff)
-	return len(buff), nil
+	return success, len(buff), nil
 
 }

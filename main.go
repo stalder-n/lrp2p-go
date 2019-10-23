@@ -18,12 +18,11 @@ func main() {
 		for {
 			buf := make([]byte, 64)
 			connection1.Read(buf)
-			connection1.Write(nil)
 		}
 	}()
 	for {
 		buf := make([]byte, 64)
-		n, _ := connection2.Read(buf)
+		_, n, _ := connection2.Read(buf)
 		fmt.Println("received:", string(buf[:n]))
 	}
 }

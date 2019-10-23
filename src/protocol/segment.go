@@ -66,10 +66,6 @@ func setFlags(buffer []byte, flags byte) {
 	buffer[indexFlags] = flags
 }
 
-func addFlags(buffer []byte, flags byte) {
-	buffer[indexFlags] = buffer[indexFlags] | flags
-}
-
 func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
 	binary.BigEndian.PutUint32(buffer[sliceStartSeqNumber:sliceEndSeqNumber], sequenceNumber)
 }
