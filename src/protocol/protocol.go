@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-type connection struct {
-	extensionDelegator
-}
-
 type statusCode int
 
 const (
@@ -98,8 +94,8 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	return udpAddress
 }
 
-func Connect(connector Connector) *connection {
-	connection := &connection{}
+func Connect(connector Connector) *extensionDelegator {
+	connection := &extensionDelegator{}
 	arq := &goBackNArq{}
 	adapter := &connectorAdapter{connector}
 	connection.addExtension(arq)
@@ -107,7 +103,7 @@ func Connect(connector Connector) *connection {
 	return connection
 }
 
-func UdpConnect(address string, senderPort, receiverPort int) *connection {
+func UdpConnect(address string, senderPort, receiverPort int) *extensionDelegator {
 	var connector Connector = &udpConnector{
 		senderAddress: address,
 		senderPort:    senderPort,
