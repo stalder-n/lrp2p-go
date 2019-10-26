@@ -101,7 +101,7 @@ func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 
 func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
-	setSegmentMtu(headerSize + 4)
+	setSegmentMtu(headerLength + 4)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, segmentMtu)
@@ -117,7 +117,7 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 
 func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
-	setSegmentMtu(headerSize + 4)
+	setSegmentMtu(headerLength + 4)
 	suite.alphaManipulator.dropOnce(2)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
@@ -141,7 +141,7 @@ func TestGoBackNArq(t *testing.T) {
 
 func setSegmentMtu(mtu int) {
 	segmentMtu = mtu
-	dataChunkSize = segmentMtu - headerSize
+	dataChunkSize = segmentMtu - headerLength
 }
 
 func newMockConnection(connector *channelConnector) (*connection, *goBackNArq, *segmentManipulator) {
