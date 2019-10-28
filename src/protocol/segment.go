@@ -10,20 +10,18 @@ type Position struct {
 	End   int
 }
 
-const headerLength = 6
+var dataOffsetPosition = Position{0, 1}
+var flagPosition = Position{1, 2}
 
-var DataOffsetPosition = Position{0, 1}
-var FlagPosition = Position{1, 2}
-
-var SequenceNumberPosition = Position{2, 6}
+var sequenceNumberPosition = Position{2, 6}
 
 const flagAck byte = 1
 const flagSyn byte = 2
 const flagEnd byte = 4
 
 const defaultSegmentMtu = 64
-
 var segmentMtu = defaultSegmentMtu
+const headerLength = 6
 var dataChunkSize = segmentMtu - headerLength
 
 type segment struct {
@@ -34,7 +32,7 @@ type segment struct {
 }
 
 func (seg *segment) getDataOffset() byte {
-	return seg.buffer[DataOffsetPosition.Start]
+	return seg.buffer[dataOffsetPosition.Start]
 }
 
 func (seg *segment) getHeaderSize() int {
@@ -42,7 +40,7 @@ func (seg *segment) getHeaderSize() int {
 }
 
 func (seg *segment) getFlags() byte {
-	return seg.buffer[FlagPosition.Start]
+	return seg.buffer[flagPosition.Start]
 }
 
 func (seg *segment) isFlaggedAs(flag byte) bool {
@@ -54,7 +52,7 @@ func (seg *segment) getSequenceNumber() uint32 {
 }
 
 func (seg *segment) getExpectedSequenceNumber() uint32 {
-	return bytesToUint32(seg.data[SequenceNumberPosition.Start:SequenceNumberPosition.End])
+	return bytesToUint32(seg.data[sequenceNumberPosition.Start:sequenceNumberPosition.End])
 }
 
 func (seg *segment) getDataAsString() string {
@@ -62,25 +60,25 @@ func (seg *segment) getDataAsString() string {
 }
 
 func setDataOffset(buffer []byte, dataOffset byte) {
-	buffer[DataOffsetPosition.Start] = dataOffset
+	buffer[dataOffsetPosition.Start] = dataOffset
 }
 
 func setFlags(buffer []byte, flags byte) {
-	buffer[FlagPosition.Start] = flags
+	buffer[flagPosition.Start] = flags
 }
 
 func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
-	binary.BigEndian.PutUint32(buffer[SequenceNumberPosition.Start:SequenceNumberPosition.End], sequenceNumber)
+	binary.BigEndian.PutUint32(buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End], sequenceNumber)
 }
 
 func createSegment(buffer []byte) segment {
 	var data []byte = nil
 	if len(buffer) > headerLength {
-		data = buffer[buffer[DataOffsetPosition.Start]:]
+		data = buffer[buffer[dataOffsetPosition.Start]:]
 	}
 	return segment{
 		buffer:         buffer,
-		sequenceNumber: buffer[SequenceNumberPosition.Start:SequenceNumberPosition.End],
+		sequenceNumber: buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End],
 		data:           data,
 	}
 }
