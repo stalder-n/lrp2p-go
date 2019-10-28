@@ -7,6 +7,30 @@ import (
 	"time"
 )
 
+type extensionDelegator struct {
+	extension Connector
+}
+
+func (connection *extensionDelegator) Open() error {
+	return connection.extension.Open()
+}
+
+func (connection *extensionDelegator) Close() error {
+	return connection.extension.Close()
+}
+
+func (connection *extensionDelegator) Write(buffer []byte) (statusCode, int, error) {
+	return connection.extension.Write(buffer)
+}
+
+func (connection *extensionDelegator) Read(buffer []byte) (statusCode, int, error) {
+	return connection.extension.Read(buffer)
+}
+
+func (connection *extensionDelegator) addExtension(extension Connector) {
+	connection.extension = extension
+}
+
 type GoBackNArqTestSuite struct {
 	suite.Suite
 	alphaConnection, betaConnection    *extensionDelegator
@@ -148,10 +172,9 @@ func newMockConnection(connector *channelConnector) (*extensionDelegator, *goBac
 	connection := &extensionDelegator{}
 	arq := &goBackNArq{}
 	manipulator := &segmentManipulator{}
-	adapter := &connectorAdapter{connector}
 	connection.addExtension(arq)
 	arq.addExtension(manipulator)
-	manipulator.addExtension(adapter)
+	manipulator.addExtension(connector)
 	return connection, arq, manipulator
 }
 

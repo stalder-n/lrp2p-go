@@ -6,7 +6,7 @@ import (
 )
 
 type goBackNArq struct {
-	extensionDelegator
+	extension             Connector
 	segmentWriteBuffer    []*segment
 	segmentQueue          queue
 	lastSegmentAcked      int
@@ -23,6 +23,14 @@ func (arq *goBackNArq) Open() error {
 		arq.windowSize = 10
 	}
 	return arq.extension.Open()
+}
+
+func (arq *goBackNArq) Close() error {
+	return arq.extension.Close()
+}
+
+func (arq *goBackNArq) addExtension(extension Connector) {
+	arq.extension = extension
 }
 
 func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
