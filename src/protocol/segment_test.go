@@ -1,83 +1,54 @@
 package protocol
 
 import (
-	"bytes"
+	"github.com/stretchr/testify/suite"
 	"testing"
 )
 
-func TestCreateAckSegment(t *testing.T) {
-	a := createAckSegment(1)
-	if a.getDataAsString() == "" {
-		t.Error("getDataAsString is empty in AckSegment")
-	}
-
-	if a.data == nil || len(a.data) == 0 {
-		t.Error("Data is nil")
-	}
-
-	if bytes.Compare(a.data, []byte{'2'}) != 0 {
-		t.Error("data is not []byte{'2'}", a.data)
-	}
-
-	if a.sequenceNumber == nil && bytes.Compare(a.sequenceNumber, []byte{'1'}) != 0 {
-		t.Error("sequenceNumber is nil or not equal to []byte{'1'}", a.sequenceNumber)
-	}
+type segmentSuite struct {
+	suite.Suite
 }
 
-func TestCreateSegment(t *testing.T) {
-	buffer := []byte{6, 1, 255, 255, 255, 255, 'T', 'E', 'S', 'T'}
-	b := createSegment(buffer)
-	if b.getDataAsString() != "TEST" {
-		t.Error("getDataAsString is not TEST", b.getDataAsString())
-	}
-
-	if b.data == nil || len(b.data) != 4 {
-		t.Error("Data is nil or len != 4", len(b.data))
-	}
-
-	if bytes.Compare(b.data, []byte{'T', 'E', 'S', 'T'}) != 0 {
-		t.Error("data is not []byte{'T', 'E', 'S','T'}", b.data)
-	}
-
-	if b.sequenceNumber == nil && bytes.Compare(b.sequenceNumber, []byte{'1'}) != 0 {
-		t.Error("sequenceNumber is nil or not equal to []byte{'1'}", b.sequenceNumber)
-	}
+func (suite *segmentSuite) TestCreateAckSegment() {
+	a := createAckSegment(1);
+	suite.NotEqual("", a.getDataAsString());
+	suite.NotNil(a.data);
+	suite.NotEqual(0, len(a.data));
+	suite.ElementsMatch([]byte{0, 0, 0, 2}, a.data);
+	suite.NotNil(a.sequenceNumber);
+	suite.ElementsMatch([]byte{0, 0, 0, 1}, a.sequenceNumber);
 }
 
-func TestCreateFlaggedSegment(t *testing.T) {
-	data := []byte{'T', 'E', 'S', 'T'}
-	c := createFlaggedSegment(100, 123, data)
+func (suite *segmentSuite) TestCreateSegment() {
+	buffer := []byte{6, 0, 0, 0, 0, 1, 'T', 'E', 'S', 'T'};
+	b := createSegment(buffer);
+	suite.NotNil(b.sequenceNumber);
+	suite.ElementsMatch([]byte{0, 0, 0, 1}, b.sequenceNumber);
+	suite.Equal("TEST", b.getDataAsString());
+	suite.NotNil(b.data);
+	suite.Equal(4, len(b.data));
+	suite.ElementsMatch([]byte{'T', 'E', 'S', 'T'}, b.data);
+}
 
-	if !c.isFlaggedAs(123) {
-		t.Error("Flag does not contain 123", c.getFlags())
-	}
+func (suite *segmentSuite) TestCreateFlaggedSegment() {
+	data := []byte{'T', 'E', 'S', 'T'};
+	c := createFlaggedSegment(100, 123, data);
+	suite.True(c.isFlaggedAs(123));
+	suite.ElementsMatch([]byte{'T', 'E', 'S', 'T'}, c.data);
+	suite.Equal(byte(6), c.getDataOffset());
+	suite.Equal(byte(123), c.getFlags());
+	suite.Equal("TEST", c.getDataAsString());
+	suite.Equal(int(c.getDataOffset()), c.getHeaderSize());
+	suite.ElementsMatch([]byte{0, 0, 0, 100}, c.sequenceNumber);
+	suite.Equal(uint32(100), c.getSequenceNumber());
+}
 
-	if bytes.Compare(c.data, []byte{'T', 'E', 'S', 'T'}) != 0 {
-		t.Error("data is not []byte{'T','E','S','T'}", c.data)
-	}
+func (suite *segmentSuite) TestGetExpectedSequenceNumber() {
+	data := []byte{'T', 'E', 'S', 'T'};
+	c := createFlaggedSegment(100, 123, data);
+	suite.Equal(uint32(101), c.getExpectedSequenceNumber());
+}
 
-	if c.getDataOffset() != 6 {
-		t.Error("DataOffset is not 6", c.getDataOffset())
-	}
-
-	if c.getFlags() != 123 {
-		t.Error("Flag is not 123", c.getFlags())
-	}
-
-	if c.getDataAsString() == "TEST" {
-		t.Error("getDataAsString is not TEST", c.getDataAsString())
-	}
-
-	if c.getHeaderSize() != int(c.getDataOffset()) {
-		t.Error("getHeaderSize is not getDataOffset", c.getHeaderSize(), c.getDataOffset())
-	}
-
-	if c.getSequenceNumber() != 100 {
-		t.Error("getSequenceNumber is not 100", c.getSequenceNumber())
-	}
-
-	if c.getExpectedSequenceNumber() != 101 {
-		t.Error("getExpectedSequenceNumber is not 101", c.getExpectedSequenceNumber())
-	}
-
+func TestSegment(t *testing.T) {
+	suite.Run(t, &segmentSuite{})
 }
