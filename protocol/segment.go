@@ -52,7 +52,8 @@ func (seg *segment) getSequenceNumber() uint32 {
 }
 
 func (seg *segment) getExpectedSequenceNumber() uint32 {
-	return bytesToUint32(seg.data[sequenceNumberPosition.Start:sequenceNumberPosition.End])
+	seqNumLength := sequenceNumberPosition.End-sequenceNumberPosition.Start;
+	return bytesToUint32(seg.data[0:seqNumLength])
 }
 
 func (seg *segment) getDataAsString() string {
