@@ -33,19 +33,6 @@ func (arq *goBackNArq) addExtension(extension Connector) {
 	arq.extension = extension
 }
 
-func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
-	var next = currentIndex + dataChunkSize
-	var flag byte = 0
-	if currentIndex == 0 {
-		flag |= FlagSYN
-	}
-	if next >= len(buffer) {
-		flag |= FlagEND
-		next = len(buffer)
-	}
-	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
-}
-
 func (arq *goBackNArq) queueSegments(buffer []byte) {
 	var currentIndex = 0
 	var segmentCount = 0
@@ -54,7 +41,7 @@ func (arq *goBackNArq) queueSegments(buffer []byte) {
 	arq.initialSequenceNumber = sequenceNumber
 	arq.lastSegmentAcked = -1
 	for {
-		currentIndex, seg = nextSegment(currentIndex, sequenceNumber, buffer)
+		currentIndex, seg = peekFlaggedSegmentOfBuffer(currentIndex, sequenceNumber, buffer)
 		arq.segmentQueue.Enqueue(seg)
 		segmentCount++
 		sequenceNumber++

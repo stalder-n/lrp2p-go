@@ -6,7 +6,6 @@ import (
 )
 
 var segmentMtu = DefaultMTU
-var dataChunkSize = segmentMtu - HeaderLength
 
 type segment struct {
 	buffer         []byte
@@ -68,6 +67,19 @@ func createSegment(buffer []byte) segment {
 	}
 }
 
+func peekFlaggedSegmentOfBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
+	var next = currentIndex + getDataChunkSize();
+	var flag byte = 0
+	if currentIndex == 0 {
+		flag |= FlagSYN
+	}
+	if next >= len(buffer) {
+		flag |= FlagEND
+		next = len(buffer)
+	}
+	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
+}
+
 func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) segment {
 	buffer := make([]byte, HeaderLength+len(data))
 	dataOffset := byte(HeaderLength)
@@ -82,6 +94,10 @@ func createAckSegment(sequenceNumber uint32) segment {
 	nextSequenceNumber := make([]byte, 4)
 	binary.BigEndian.PutUint32(nextSequenceNumber, sequenceNumber+1)
 	return createFlaggedSegment(sequenceNumber, FlagACK, nextSequenceNumber)
+}
+
+func getDataChunkSize() int {
+	return segmentMtu - HeaderLength;
 }
 
 func bytesToUint32(buffer []byte) uint32 {

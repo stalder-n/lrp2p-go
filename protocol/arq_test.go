@@ -165,7 +165,6 @@ func TestGoBackNArq(t *testing.T) {
 
 func setSegmentMtu(mtu int) {
 	segmentMtu = mtu
-	dataChunkSize = segmentMtu - HeaderLength
 }
 
 func newMockConnection(connector *channelConnector) (*extensionDelegator, *goBackNArq, *segmentManipulator) {

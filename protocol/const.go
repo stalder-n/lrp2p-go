@@ -12,6 +12,17 @@ const (
 	HeaderLength = 6
 )
 
+type statusCode int
+
+const (
+	success statusCode = iota
+	fail
+	ackReceived
+	pendingSegments
+	invalidSegment
+	windowFull
+)
+
 type Position struct {
 	Start int
 	End   int
