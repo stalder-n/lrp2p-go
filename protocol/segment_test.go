@@ -17,6 +17,7 @@ func (suite *segmentSuite) TestCreateAckSegment() {
 	suite.ElementsMatch([]byte{0, 0, 0, 2}, a.data);
 	suite.NotNil(a.sequenceNumber);
 	suite.ElementsMatch([]byte{0, 0, 0, 1}, a.sequenceNumber);
+	suite.Equal(uint32(2), a.getExpectedSequenceNumber());
 }
 
 func (suite *segmentSuite) TestCreateSegment() {
@@ -44,9 +45,9 @@ func (suite *segmentSuite) TestCreateFlaggedSegment() {
 }
 
 func (suite *segmentSuite) TestGetExpectedSequenceNumber() {
-	data := []byte{'T', 'E', 'S', 'T'};
+	data := []byte{0, 0, 0, 100, 'T', 'E', 'S', 'T'};
 	c := createFlaggedSegment(100, 123, data);
-	suite.Equal(uint32(101), c.getExpectedSequenceNumber());
+	suite.Equal(uint32(100), c.getExpectedSequenceNumber());
 }
 
 func TestSegment(t *testing.T) {
