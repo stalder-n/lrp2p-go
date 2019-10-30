@@ -19,8 +19,6 @@ const (
 	windowFull
 )
 
-var retransmissionTimeout = 200 * time.Millisecond
-
 var sequenceNumberFactory = func() uint32 {
 	b := make([]byte, 4)
 	_, err := rand.Read(b)
@@ -37,7 +35,7 @@ func initialSequenceNumber() uint32 {
 }
 
 func hasSegmentTimedOut(seg *segment) bool {
-	timeout := seg.timestamp.Add(retransmissionTimeout)
+	timeout := seg.timestamp.Add(RetransmissionTimeout)
 	return time.Now().After(timeout)
 }
 

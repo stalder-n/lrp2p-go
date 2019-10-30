@@ -37,10 +37,10 @@ func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segm
 	var next = currentIndex + dataChunkSize
 	var flag byte = 0
 	if currentIndex == 0 {
-		flag |= flagSyn
+		flag |= FlagSYN
 	}
 	if next >= len(buffer) {
-		flag |= flagEnd
+		flag |= FlagEND
 		next = len(buffer)
 	}
 	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
@@ -58,7 +58,7 @@ func (arq *goBackNArq) queueSegments(buffer []byte) {
 		arq.segmentQueue.Enqueue(seg)
 		segmentCount++
 		sequenceNumber++
-		if seg.isFlaggedAs(flagEnd) {
+		if seg.isFlaggedAs(FlagEND) {
 			break
 		}
 	}
@@ -129,13 +129,13 @@ func (arq *goBackNArq) Read(buffer []byte) (statusCode, int, error) {
 	}
 	seg := createSegment(buf)
 
-	if seg.isFlaggedAs(flagAck) {
+	if seg.isFlaggedAs(FlagACK) {
 		arq.handleAck(&seg)
 		return ackReceived, n, err
 	}
 
 	if arq.lastInOrderNumber == 0 {
-		if !seg.isFlaggedAs(flagSyn) {
+		if !seg.isFlaggedAs(FlagSYN) {
 			return invalidSegment, n, err
 		}
 	} else if seg.getSequenceNumber() != arq.lastInOrderNumber+1 {
@@ -146,7 +146,7 @@ func (arq *goBackNArq) Read(buffer []byte) (statusCode, int, error) {
 	}
 
 	arq.writeMutex.Lock()
-	if seg.isFlaggedAs(flagEnd) {
+	if seg.isFlaggedAs(FlagEND) {
 		arq.lastInOrderNumber = 0
 	} else {
 		arq.lastInOrderNumber = seg.getSequenceNumber()

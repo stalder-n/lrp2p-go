@@ -50,7 +50,7 @@ func (suite *GoBackNArqTestSuite) SetupTest() {
 func (suite *GoBackNArqTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaConnection.Close())
 	suite.handleTestError(suite.betaConnection.Close())
-	setSegmentMtu(defaultSegmentMtu)
+	setSegmentMtu(DefaultMTU)
 }
 
 func (suite *GoBackNArqTestSuite) write(c *extensionDelegator, data []byte) {
@@ -111,12 +111,12 @@ func (suite *GoBackNArqTestSuite) TestSendInOneSegment() {
 func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
 	suite.alphaManipulator.dropOnce(1)
-	retransmissionTimeout = 20 * time.Millisecond
+	RetransmissionTimeout = 20 * time.Millisecond
 	message := "Hello, World!"
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, segmentMtu)
 	suite.write(suite.alphaConnection, writeBuffer)
-	time.Sleep(retransmissionTimeout)
+	time.Sleep(RetransmissionTimeout)
 	suite.write(suite.alphaConnection, nil)
 	suite.read(suite.betaConnection, message, readBuffer)
 	suite.readAck(suite.alphaConnection, readBuffer)
@@ -125,7 +125,7 @@ func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 
 func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
-	setSegmentMtu(headerLength + 4)
+	setSegmentMtu(HeaderLength + 4)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, segmentMtu)
@@ -141,7 +141,7 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 
 func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
-	setSegmentMtu(headerLength + 4)
+	setSegmentMtu(HeaderLength + 4)
 	suite.alphaManipulator.dropOnce(2)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
@@ -165,7 +165,7 @@ func TestGoBackNArq(t *testing.T) {
 
 func setSegmentMtu(mtu int) {
 	segmentMtu = mtu
-	dataChunkSize = segmentMtu - headerLength
+	dataChunkSize = segmentMtu - HeaderLength
 }
 
 func newMockConnection(connector *channelConnector) (*extensionDelegator, *goBackNArq, *segmentManipulator) {
