@@ -6,7 +6,7 @@ import (
 )
 
 type goBackNArq struct {
-	extensionDelegator
+	extension             Connector
 	segmentWriteBuffer    []*segment
 	segmentQueue          queue
 	lastSegmentAcked      int
@@ -23,6 +23,14 @@ func (arq *goBackNArq) Open() error {
 		arq.windowSize = 10
 	}
 	return arq.extension.Open()
+}
+
+func (arq *goBackNArq) Close() error {
+	return arq.extension.Close()
+}
+
+func (arq *goBackNArq) addExtension(extension Connector) {
+	arq.extension = extension
 }
 
 func nextSegment(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
@@ -50,7 +58,7 @@ func (arq *goBackNArq) queueSegments(buffer []byte) {
 		arq.segmentQueue.Enqueue(seg)
 		segmentCount++
 		sequenceNumber++
-		if seg.flaggedAs(flagEnd) {
+		if seg.isFlaggedAs(flagEnd) {
 			break
 		}
 	}
@@ -100,7 +108,7 @@ func (arq *goBackNArq) writeQueuedSegments() (statusCode, int, error) {
 		if err != nil {
 			return status, sumN, err
 		}
-		sumN += n - seg.headerSize()
+		sumN += n - seg.getHeaderSize()
 		arq.segmentWriteBuffer[seg.getSequenceNumber()-arq.initialSequenceNumber] = &seg
 		arq.window++
 	}
@@ -121,13 +129,13 @@ func (arq *goBackNArq) Read(buffer []byte) (statusCode, int, error) {
 	}
 	seg := createSegment(buf)
 
-	if seg.flaggedAs(flagAck) {
+	if seg.isFlaggedAs(flagAck) {
 		arq.handleAck(&seg)
 		return ackReceived, n, err
 	}
 
 	if arq.lastInOrderNumber == 0 {
-		if !seg.flaggedAs(flagSyn) {
+		if !seg.isFlaggedAs(flagSyn) {
 			return invalidSegment, n, err
 		}
 	} else if seg.getSequenceNumber() != arq.lastInOrderNumber+1 {
@@ -138,7 +146,7 @@ func (arq *goBackNArq) Read(buffer []byte) (statusCode, int, error) {
 	}
 
 	arq.writeMutex.Lock()
-	if seg.flaggedAs(flagEnd) {
+	if seg.isFlaggedAs(flagEnd) {
 		arq.lastInOrderNumber = 0
 	} else {
 		arq.lastInOrderNumber = seg.getSequenceNumber()
@@ -147,7 +155,7 @@ func (arq *goBackNArq) Read(buffer []byte) (statusCode, int, error) {
 
 	_, _, err = arq.writeAck(seg.getSequenceNumber())
 	copy(buffer, seg.data)
-	return status, n - seg.headerSize(), err
+	return status, n - seg.getHeaderSize(), err
 }
 
 func (arq *goBackNArq) handleAck(seg *segment) {

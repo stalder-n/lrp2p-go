@@ -7,9 +7,33 @@ import (
 	"time"
 )
 
+type extensionDelegator struct {
+	extension Connector
+}
+
+func (connection *extensionDelegator) Open() error {
+	return connection.extension.Open()
+}
+
+func (connection *extensionDelegator) Close() error {
+	return connection.extension.Close()
+}
+
+func (connection *extensionDelegator) Write(buffer []byte) (statusCode, int, error) {
+	return connection.extension.Write(buffer)
+}
+
+func (connection *extensionDelegator) Read(buffer []byte) (statusCode, int, error) {
+	return connection.extension.Read(buffer)
+}
+
+func (connection *extensionDelegator) addExtension(extension Connector) {
+	connection.extension = extension
+}
+
 type GoBackNArqTestSuite struct {
 	suite.Suite
-	alphaConnection, betaConnection    *connection
+	alphaConnection, betaConnection    *extensionDelegator
 	alphaArq, betaArq                  *goBackNArq
 	alphaManipulator, betaManipulator2 *segmentManipulator
 	initialSequenceNumberQueue         queue
@@ -29,24 +53,24 @@ func (suite *GoBackNArqTestSuite) TearDownTest() {
 	setSegmentMtu(defaultSegmentMtu)
 }
 
-func (suite *GoBackNArqTestSuite) write(c *connection, data []byte) {
+func (suite *GoBackNArqTestSuite) write(c *extensionDelegator, data []byte) {
 	status, _, err := c.Write(data)
 	suite.handleTestError(err)
 	suite.Equal(success, status)
 }
 
-func (suite *GoBackNArqTestSuite) read(c *connection, expected string, readBuffer []byte) {
+func (suite *GoBackNArqTestSuite) read(c *extensionDelegator, expected string, readBuffer []byte) {
 	status, n, err := c.Read(readBuffer)
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
 	suite.Equal(success, status)
 }
 
-func (suite *GoBackNArqTestSuite) readAck(c *connection, readBuffer []byte) {
+func (suite *GoBackNArqTestSuite) readAck(c *extensionDelegator, readBuffer []byte) {
 	suite.readExpectStatus(c, ackReceived, readBuffer)
 }
 
-func (suite *GoBackNArqTestSuite) readExpectStatus(c *connection, expected statusCode, readBuffer []byte) {
+func (suite *GoBackNArqTestSuite) readExpectStatus(c *extensionDelegator, expected statusCode, readBuffer []byte) {
 	status, _, err := c.Read(readBuffer)
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
@@ -101,7 +125,7 @@ func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 
 func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
-	setSegmentMtu(headerSize + 4)
+	setSegmentMtu(headerLength + 4)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, segmentMtu)
@@ -117,7 +141,7 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 
 func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
 	suite.initialSequenceNumberQueue.Enqueue(uint32(1))
-	setSegmentMtu(headerSize + 4)
+	setSegmentMtu(headerLength + 4)
 	suite.alphaManipulator.dropOnce(2)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
@@ -141,17 +165,16 @@ func TestGoBackNArq(t *testing.T) {
 
 func setSegmentMtu(mtu int) {
 	segmentMtu = mtu
-	dataChunkSize = segmentMtu - headerSize
+	dataChunkSize = segmentMtu - headerLength
 }
 
-func newMockConnection(connector *channelConnector) (*connection, *goBackNArq, *segmentManipulator) {
-	connection := &connection{}
+func newMockConnection(connector *channelConnector) (*extensionDelegator, *goBackNArq, *segmentManipulator) {
+	connection := &extensionDelegator{}
 	arq := &goBackNArq{}
 	manipulator := &segmentManipulator{}
-	adapter := &connectorAdapter{connector}
 	connection.addExtension(arq)
 	arq.addExtension(manipulator)
-	manipulator.addExtension(adapter)
+	manipulator.addExtension(connector)
 	return connection, arq, manipulator
 }
 
