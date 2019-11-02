@@ -10,7 +10,7 @@ type segmentSuite struct {
 }
 
 func (suite *segmentSuite) TestCreateAckSegment() {
-	a := createAckSegment(1);
+	a := createAckSegment(1, 2);
 	suite.NotEqual("", a.getDataAsString());
 	suite.NotNil(a.data);
 	suite.NotEqual(0, len(a.data));

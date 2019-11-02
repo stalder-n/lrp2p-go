@@ -24,10 +24,6 @@ var sequenceNumberFactory = func() uint32 {
 	return sequenceNum
 }
 
-func initialSequenceNumber() uint32 {
-	return sequenceNumberFactory()
-}
-
 func hasSegmentTimedOut(seg *segment) bool {
 	timeout := seg.timestamp.Add(RetransmissionTimeout)
 	return time.Now().After(timeout)
@@ -35,7 +31,7 @@ func hasSegmentTimedOut(seg *segment) bool {
 
 func Connect(connector Connector) Connector {
 	arq := &goBackNArq{}
-	arq.addExtension(connector)
+	arq.AddExtension(connector)
 	return arq
 }
 

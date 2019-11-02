@@ -90,10 +90,10 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) segmen
 	return createSegment(buffer)
 }
 
-func createAckSegment(sequenceNumber uint32) segment {
-	nextSequenceNumber := make([]byte, 4)
-	binary.BigEndian.PutUint32(nextSequenceNumber, sequenceNumber+1)
-	return createFlaggedSegment(sequenceNumber, FlagACK, nextSequenceNumber)
+func createAckSegment(sequenceNumber uint32, receivedSequenceNumber uint32) segment {
+	receivedSequenceNumberBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(receivedSequenceNumberBytes, receivedSequenceNumber)
+	return createFlaggedSegment(sequenceNumber, FlagACK, receivedSequenceNumberBytes)
 }
 
 func getDataChunkSize() int {
