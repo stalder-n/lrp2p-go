@@ -1,6 +1,9 @@
 package protocol
 
-import "container/list"
+import (
+	"container/list"
+	"sync"
+)
 
 type queue struct {
 	list list.List
@@ -32,4 +35,39 @@ func (q *queue) Peek() interface{} {
 
 func (q *queue) IsEmpty() bool {
 	return q.list.Len() == 0
+}
+
+type concurrencyQueue struct {
+	queue
+	mutex sync.RWMutex
+}
+
+func (q *concurrencyQueue) Enqueue(value interface{}) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	q.queue.Enqueue(value)
+}
+
+func (q *concurrencyQueue) PushFront(value interface{}) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	q.queue.PushFront(value)
+}
+
+func (q *concurrencyQueue) Dequeue() interface{} {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	return q.queue.Dequeue()
+}
+
+func (q *concurrencyQueue) Peek() interface{} {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+	return q.queue.Dequeue()
+}
+
+func (q *concurrencyQueue) IsEmpty() bool {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+	return q.queue.IsEmpty()
 }
