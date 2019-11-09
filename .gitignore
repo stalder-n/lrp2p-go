@@ -16,3 +16,5 @@ pkg/
 .idea/
 *.iml
 build/
+
+notes.md

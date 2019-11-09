@@ -29,21 +29,6 @@ func hasSegmentTimedOut(seg *segment) bool {
 	return time.Now().After(timeout)
 }
 
-func Connect(connector Connector) Connector {
-	arq := &goBackNArq{}
-	arq.AddExtension(connector)
-	return arq
-}
-
-func UdpConnect(address string, senderPort, receiverPort int) Connector {
-	var connector Connector = &udpConnector{
-		senderAddress: address,
-		senderPort:    senderPort,
-		receiverPort:  receiverPort,
-	}
-	return Connect(connector)
-}
-
 func handleError(err error) {
 	if err != nil {
 		log.Fatal(err)

@@ -7,6 +7,18 @@ import (
 
 var segmentMtu = DefaultMTU
 
+func getDataChunkSize() int {
+	return segmentMtu - HeaderLength;
+}
+
+func bytesToUint32(buffer []byte) uint32 {
+	return binary.BigEndian.Uint32(buffer)
+}
+
+func isFlaggedAs(input byte, flag byte) bool {
+	return input&flag == flag
+}
+
 type segment struct {
 	buffer         []byte
 	sequenceNumber []byte
@@ -27,7 +39,7 @@ func (seg *segment) getFlags() byte {
 }
 
 func (seg *segment) isFlaggedAs(flag byte) bool {
-	return seg.getFlags()&flag == flag
+	return isFlaggedAs(seg.getFlags(), flag)
 }
 
 func (seg *segment) getSequenceNumber() uint32 {
@@ -35,7 +47,7 @@ func (seg *segment) getSequenceNumber() uint32 {
 }
 
 func (seg *segment) getExpectedSequenceNumber() uint32 {
-	seqNumLength := SequencenumberPosition.End- SequencenumberPosition.Start;
+	seqNumLength := SequencenumberPosition.End - SequencenumberPosition.Start;
 	return bytesToUint32(seg.data[0:seqNumLength])
 }
 
@@ -67,19 +79,6 @@ func createSegment(buffer []byte) segment {
 	}
 }
 
-func peekFlaggedSegmentOfBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
-	var next = currentIndex + getDataChunkSize();
-	var flag byte = 0
-	if currentIndex == 0 {
-		flag |= FlagSYN
-	}
-	if next >= len(buffer) {
-		flag |= FlagEND
-		next = len(buffer)
-	}
-	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
-}
-
 func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) segment {
 	buffer := make([]byte, HeaderLength+len(data))
 	dataOffset := byte(HeaderLength)
@@ -96,10 +95,19 @@ func createAckSegment(sequenceNumber uint32, receivedSequenceNumber uint32) segm
 	return createFlaggedSegment(sequenceNumber, FlagACK, receivedSequenceNumberBytes)
 }
 
-func getDataChunkSize() int {
-	return segmentMtu - HeaderLength;
+func createSelectiveAckSegment(sequenceNumber uint32, data interface{}) segment {
+	//TODO
+	return createFlaggedSegment(sequenceNumber, FlagSelectiveACK, nil)
 }
 
-func bytesToUint32(buffer []byte) uint32 {
-	return binary.BigEndian.Uint32(buffer)
+func peekFlaggedSegmentOfBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, segment) {
+	var next = currentIndex + getDataChunkSize();
+	var flag byte = 0
+	if currentIndex == 0 {
+		flag |= FlagSYN
+	}
+	if next >= len(buffer) {
+		next = len(buffer)
+	}
+	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
 }

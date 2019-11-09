@@ -7,42 +7,41 @@ import (
 	"reflect"
 )
 
-type queue struct {
+type Queue struct {
 	list        list.List
 	elementType reflect.Type
-	once        bool
 }
 
-func (q *queue) setType(value interface{}) {
-	if !q.once {
+func (q *Queue) setType(value interface{}) {
+	if q.elementType == nil {
 		q.elementType = reflect.TypeOf(value)
-		q.once = true
 	}
 }
 
-func (q *queue) checkType(value interface{}) {
-	if reflect.TypeOf(value) != q.elementType {
-		panic("TypeOf value and TypeOf queue does not match")
+func (q *Queue) checkType(value interface{}) {
+	if reflect.TypeOf(value).Name() != q.elementType.Name() {
+		panic("TypeOf value and TypeOf Queue does not match")
 	}
 }
 
-func (q *queue) Enqueue(value interface{}) {
+func (q *Queue) Enqueue(value interface{}) {
 	q.setType(value)
 	q.checkType(value)
 	q.list.PushBack(value)
 }
 
-func (q *queue) PushFront(value interface{}) {
+func (q *Queue) PushFront(value interface{}) {
 	q.setType(value)
 	q.checkType(value)
 
 	q.list.PushFront(value)
 }
-func (q *queue) PushFrontList(values *list.List) {
+
+func (q *Queue) PushFrontList(values *list.List) {
 	q.list.PushFrontList(values)
 }
 
-func (q *queue) Dequeue() interface{} {
+func (q *Queue) Dequeue() interface{} {
 	if q.IsEmpty() {
 		return nil
 	}
@@ -51,30 +50,87 @@ func (q *queue) Dequeue() interface{} {
 	return elem.Value
 }
 
-func (q *queue) Peek() interface{} {
+func (q *Queue) Peek() interface{} {
 	if q.IsEmpty() {
 		return nil
 	}
 	return q.list.Front().Value
 }
 
-func (q *queue) IsEmpty() bool {
+func (q *Queue) IsEmpty() bool {
 	return q.Len() == 0
 }
 
-func (q *queue) Len() int {
+func (q *Queue) Len() int {
 	return q.list.Len()
 }
 
-func (q *queue) GetElementGreaterSequenceNumber(sequenceNumber uint32) *list.List {
+//TODO make generic or refactor
+func (q *Queue) GetElementGreaterSequenceNumber(sequenceNumber uint32) *list.List {
 	var sequenceNumberBytes = make([]byte, 4)
 	binary.BigEndian.PutUint32(sequenceNumberBytes, sequenceNumber)
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
 		seg := ele.Value.(segment)
-		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == 0 || bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == 1 {
+		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == 1 {
 			sl.PushBack(seg)
+		}
+	}
+
+	return sl
+}
+
+func (q *Queue) GetElementsGreaterOrEqualsSequenceNumber(sequenceNumber uint32) *list.List {
+	result := q.GetElementGreaterSequenceNumber(sequenceNumber)
+	result.PushFrontList(q.GetElementsEqualSequenceNumber(sequenceNumber))
+	return result
+}
+
+func (q *Queue) GetElementsSmallerSequenceNumber(sequenceNumber uint32) *list.List {
+	var sequenceNumberBytes = make([]byte, 4)
+	binary.BigEndian.PutUint32(sequenceNumberBytes, sequenceNumber)
+	sl := list.New()
+
+	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
+		seg := ele.Value.(segment)
+		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == -1 {
+			sl.PushBack(seg)
+		}
+	}
+
+	return sl
+}
+
+func (q *Queue) GetElementsEqualSequenceNumber(sequenceNumber uint32) *list.List {
+	var sequenceNumberBytes = make([]byte, 4)
+	binary.BigEndian.PutUint32(sequenceNumberBytes, sequenceNumber)
+	sl := list.New()
+
+	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
+		seg := ele.Value.(segment)
+		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == 0 {
+			sl.PushBack(seg)
+		}
+	}
+
+	return sl
+}
+
+func (q *Queue) RemoveElementsInRangeSequenceNumberIncluded(sequenceNumberRange Position) *list.List {
+	var lowersequenceNumberBytes = make([]byte, 4)
+	var highersequenceNumberBytes = make([]byte, 4)
+
+	binary.BigEndian.PutUint32(lowersequenceNumberBytes, uint32(sequenceNumberRange.Start))
+	binary.BigEndian.PutUint32(highersequenceNumberBytes, uint32(sequenceNumberRange.End))
+
+	sl := list.New()
+
+	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
+		seg := ele.Value.(segment)
+		if bytes.Compare(seg.sequenceNumber, lowersequenceNumberBytes) >= 0 || bytes.Compare(seg.sequenceNumber, highersequenceNumberBytes) <= 0 {
+			sl.PushBack(seg)
+			q.list.Remove(ele)
 		}
 	}
 
