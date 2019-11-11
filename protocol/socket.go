@@ -1,10 +1,14 @@
 package protocol
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type Socket struct {
-	connection Connector
-	readQueue  concurrencyQueue
+	connection    Connector
+	readQueue     concurrencyQueue
+	dataAvailable *sync.Cond
 }
 
 type payload struct {
@@ -15,6 +19,7 @@ type payload struct {
 
 func (socket *Socket) Open() error {
 	err := socket.connection.Open()
+	socket.dataAvailable = sync.NewCond(&sync.Mutex{})
 	if err != nil {
 		return err
 	}
@@ -51,10 +56,12 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 }
 
 func (socket *Socket) Read(buffer []byte) (int, error) {
+	socket.dataAvailable.L.Lock()
 	for socket.readQueue.IsEmpty() {
-		time.Sleep(10 * time.Millisecond)
+		socket.dataAvailable.Wait()
 	}
 	p := socket.readQueue.Dequeue().(*payload)
+	socket.dataAvailable.L.Unlock()
 	copy(buffer, p.data)
 	return p.n, p.err
 }
@@ -67,6 +74,7 @@ func (socket *Socket) read() {
 		case success:
 			p := &payload{n, err, buffer}
 			socket.readQueue.Enqueue(p)
+			socket.dataAvailable.Signal()
 		case ackReceived:
 		}
 	}
