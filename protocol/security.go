@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/rand"
 	"github.com/flynn/noise"
+	"log"
 )
 
 type securityExtension struct {
@@ -86,6 +87,6 @@ func (sec *securityExtension) readHandshakeMessage() (*noise.CipherState, *noise
 
 func reportError(err error) {
 	if err != nil {
-		panic(err.Error())
+		log.Println(err)
 	}
 }
