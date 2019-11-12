@@ -17,6 +17,8 @@ const (
 	pendingSegments
 	invalidSegment
 	windowFull
+	waitingForHandshake
+	invalidNonce
 )
 
 var retransmissionTimeout = 200 * time.Millisecond

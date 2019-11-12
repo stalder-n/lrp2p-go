@@ -1,12 +1,27 @@
 package protocol
 
 import (
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"sync"
 	"testing"
 )
 
-func TestSecurityExtension_SimpleWriteRead(t *testing.T) {
+type SecurityTestSuite struct {
+	suite.Suite
+	alphaConnection, betaConnection *securityExtension
+}
+
+func (suite *SecurityTestSuite) SetupTest() {
+	suite.mockConnections()
+}
+
+func (suite *SecurityTestSuite) TearDownTest() {
+	suite.handleTestError(suite.alphaConnection.Close())
+	suite.handleTestError(suite.betaConnection.Close())
+	setSegmentMtu(defaultSegmentMtu)
+}
+
+func (suite *SecurityTestSuite) mockConnections() {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	connector1, connector2 := &channelConnector{
 		in:  endpoint1,
@@ -15,25 +30,42 @@ func TestSecurityExtension_SimpleWriteRead(t *testing.T) {
 		in:  endpoint2,
 		out: endpoint1,
 	}
-	sec1 := securityExtension{connector: connector1}
-	sec2 := securityExtension{connector: connector2}
+	suite.alphaConnection = &securityExtension{connector: connector1}
+	suite.betaConnection = &securityExtension{connector: connector2}
+}
 
+func (suite *SecurityTestSuite) handleTestError(err error) {
+	if err != nil {
+		suite.Errorf(err, "Error occurred")
+	}
+}
+
+func (suite *SecurityTestSuite) TestSecurityExtension_ExchangeGreeting() {
+	suite.mockConnections()
 	expected := "Hello, World!"
 
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {
-		_, _, _ = sec1.Write([]byte(expected))
+		_, _, _ = suite.alphaConnection.Write([]byte(expected))
+		buf := make([]byte, segmentMtu)
+		_, n, _ := suite.alphaConnection.Read(buf)
+		suite.Equal(expected, string(buf[:n]))
 		group.Done()
 	}()
 
 	go func() {
 		buf := make([]byte, segmentMtu)
-		_, n, _ := sec2.Read(buf)
-		assert.Equal(t, expected, string(buf[:n]))
+		_, n, _ := suite.betaConnection.Read(buf)
+		suite.Equal(expected, string(buf[:n]))
+		_, _, _ = suite.betaConnection.Write([]byte(expected))
 		group.Done()
 	}()
 
 	group.Wait()
 
+}
+
+func TestSecurityExtension(t *testing.T) {
+	suite.Run(t, new(SecurityTestSuite))
 }

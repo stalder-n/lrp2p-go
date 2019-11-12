@@ -2,15 +2,20 @@ package protocol
 
 import (
 	"crypto/rand"
+	"encoding/binary"
+	"github.com/deckarep/golang-set"
 	"github.com/flynn/noise"
 	"log"
 )
 
 type securityExtension struct {
-	connector Connector
-	handshake *noise.HandshakeState
-	encrypter *noise.CipherState
-	decrypter *noise.CipherState
+	connector     Connector
+	handshake     *noise.HandshakeState
+	encrypter     *noise.CipherState
+	decrypter     *noise.CipherState
+	writeNonce    uint64
+	readNonce     uint64
+	missingNonces mapset.Set
 }
 
 func (sec *securityExtension) Open() error {
@@ -25,19 +30,61 @@ func (sec *securityExtension) Write(buffer []byte) (statusCode, int, error) {
 	if sec.handshake == nil {
 		sec.initiateHandshake()
 	}
-	return sec.connector.Write(sec.encrypter.Encrypt(nil, nil, buffer))
+	if sec.encrypter == nil {
+		return waitingForHandshake, 0, nil
+	}
+
+	encrypted := sec.encrypter.Cipher().Encrypt(nil, sec.writeNonce, nil, buffer)
+	buf := make([]byte, 8+len(encrypted))
+	copy(buf[8:], encrypted)
+	binary.BigEndian.PutUint64(buf, sec.writeNonce)
+	sec.writeNonce++
+	return sec.connector.Write(buf)
 }
 
 func (sec *securityExtension) Read(buffer []byte) (statusCode, int, error) {
 	if sec.handshake == nil {
 		sec.acceptHandshake()
 	}
+	if sec.decrypter == nil {
+		return waitingForHandshake, 0, nil
+	}
+	encrypted := make([]byte, len(buffer))
+	statusCode, n, err := sec.connector.Read(encrypted)
+	nonce := binary.BigEndian.Uint64(encrypted[:8])
+	nonceStatus := sec.syncNonces(nonce)
+	if nonceStatus != success {
+		return nonceStatus, 0, nil
+	}
 
-	encryptedMsg := make([]byte, len(buffer))
-	statusCode, n, err := sec.connector.Read(encryptedMsg)
-	decryptedMsg, err := sec.decrypter.Decrypt(nil, nil, encryptedMsg[:n])
+	decryptedMsg, err := sec.decrypter.Cipher().Decrypt(nil, nonce, nil, encrypted[8:n])
 	copy(buffer, decryptedMsg)
 	return statusCode, len(decryptedMsg), err
+}
+
+// Ensures the received nonce is valid, i.e. a nonce that hasn't been used before.
+// To account for packet loss or wrong order, all skipped nonces are saved in a set
+// that is updated accordingly as nonces are used
+func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
+	if nonce > sec.readNonce {
+		for i := sec.readNonce + 1; i < nonce; i++ {
+			sec.missingNonces.Add(i)
+		}
+		sec.readNonce = nonce
+		return success
+	} else {
+		it := sec.missingNonces.Iterator()
+		for n := range it.C {
+			if n.(uint64) == nonce {
+				it.Stop()
+				sec.missingNonces.Remove(n)
+				sec.readNonce = nonce
+				return success
+			}
+		}
+		it.Stop()
+	}
+	return invalidNonce
 }
 
 func (sec *securityExtension) initiateHandshake() {
@@ -53,6 +100,7 @@ func (sec *securityExtension) initiateHandshake() {
 	sec.writeHandshakeMessage()
 	sec.readHandshakeMessage()
 	sec.encrypter, sec.decrypter = sec.writeHandshakeMessage()
+	sec.missingNonces = mapset.NewSet(uint64(0))
 }
 
 func (sec *securityExtension) acceptHandshake() {
@@ -68,6 +116,7 @@ func (sec *securityExtension) acceptHandshake() {
 	sec.readHandshakeMessage()
 	sec.writeHandshakeMessage()
 	sec.decrypter, sec.encrypter = sec.readHandshakeMessage()
+	sec.missingNonces = mapset.NewSet(uint64(0))
 }
 
 func (sec *securityExtension) writeHandshakeMessage() (*noise.CipherState, *noise.CipherState) {
