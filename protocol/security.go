@@ -18,6 +18,10 @@ type securityExtension struct {
 	missingNonces mapset.Set
 }
 
+func (arq *securityExtension) addExtension(extension Connector) {
+	arq.connector = extension
+}
+
 func (sec *securityExtension) Open() error {
 	return sec.connector.Open()
 }
