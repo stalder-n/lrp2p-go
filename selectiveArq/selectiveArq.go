@@ -10,7 +10,7 @@ type selectiveArq struct {
 	extension               Connector
 	notAckedSegment         []*Segment
 	readyToSendSegmentQueue Queue
-	notAckedBitmap          Bitmap
+	notAckedBitmap          *Bitmap
 	currentInorderNumber    uint32
 	initialSequenceNumber   uint32
 	currentSequenceNumber   uint32
@@ -29,8 +29,7 @@ func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
 func (arq *selectiveArq) Open() error {
 	arq.windowSize = 20
 
-	arq.notAckedBitmap = Bitmap{}
-	arq.notAckedBitmap.New(int(arq.windowSize))
+	arq.notAckedBitmap = New(int(arq.windowSize))
 
 	arq.readyToSendSegmentQueue = Queue{}
 	arq.readyToSendSegmentQueue.New()
@@ -162,8 +161,7 @@ func (arq *selectiveArq) Read(buffer []byte) (StatusCode, int, error) {
 }
 
 func (arq *selectiveArq) handleSelectiveAck(seg *Segment) {
-	ackedSegmentSequenceNumbers := &Bitmap{}
-	ackedSegmentSequenceNumbers.New(int(arq.windowSize))
+	ackedSegmentSequenceNumbers := New(int(arq.windowSize))
 	ackedSegmentSequenceNumbers.Init(BytesToUint32(seg.Data))
 
 	for i := uint32(0); i < arq.windowSize; i++ {

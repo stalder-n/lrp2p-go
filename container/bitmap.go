@@ -4,8 +4,11 @@ type Bitmap struct {
 	data []uint32
 }
 
-func (m *Bitmap) New(size int) {
-	m.data = make([]uint32, size)
+func New(size int) *Bitmap {
+	result := &Bitmap{}
+	result.data = make([]uint32, size)
+
+	return result
 }
 
 func (m *Bitmap) Set(index uint32, value uint32) {

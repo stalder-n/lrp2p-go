@@ -6,9 +6,7 @@ import (
 )
 
 func TestBitmap_Set(t *testing.T) {
-	b := Bitmap{}
-
-	b.New(3)
+	b := New(3)
 
 	b.Set(0, 1)
 	b.Set(1, 0)
@@ -24,8 +22,7 @@ func TestBitmap_Set(t *testing.T) {
 }
 
 func TestBitmap_Get(t *testing.T) {
-	b := Bitmap{}
-	b.New(3)
+	b := New(3)
 	b.Set(0, 1)
 	b.Set(1, 0)
 	b.Set(2, 3)
@@ -36,16 +33,14 @@ func TestBitmap_Get(t *testing.T) {
 }
 
 func TestBitmap_ToNumber(t *testing.T) {
-	b := Bitmap{}
-	b.New(3)
+	b := New(3)
 	b.Set(0, 1)
 	b.Set(1, 0)
 	b.Set(2, 1)
 
 	assert.Equal(t, uint32(5), b.ToNumber())
 
-	b2 := Bitmap{}
-	b2.New(3)
+	b2 := New(3)
 	b2.Set(0, 1)
 	b2.Set(1, 1)
 	b2.Set(2, 0)
@@ -54,8 +49,7 @@ func TestBitmap_ToNumber(t *testing.T) {
 }
 
 func TestBitmap_Init(t *testing.T) {
-	b := Bitmap{}
-	b.New(7)
+	b := New(7)
 	b.Init(123) //ob1111011
 
 	assert.Equal(t, 7, len(b.data))
@@ -69,12 +63,10 @@ func TestBitmap_Init(t *testing.T) {
 }
 
 func TestBitmap_ToNumberInverted(t *testing.T) {
-	b1 := Bitmap{}
-	b1.New(7)
+	b1 := New(7)
 	b1.Init(123) //ob1111011
 
-	b2 := Bitmap{}
-	b2.New(7)
+	b2 := New(7)
 	b2.Init(4) //ob0000100
 
 	for i := 0; i < 7; i++ {
