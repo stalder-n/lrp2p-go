@@ -3,19 +3,17 @@ package protocol
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"github.com/deckarep/golang-set"
 	"github.com/flynn/noise"
 	"log"
 )
 
 type securityExtension struct {
-	connector     Connector
-	handshake     *noise.HandshakeState
-	encrypter     *noise.CipherState
-	decrypter     *noise.CipherState
-	writeNonce    uint64
-	readNonce     uint64
-	missingNonces mapset.Set
+	connector  Connector
+	handshake  *noise.HandshakeState
+	encrypter  *noise.CipherState
+	decrypter  *noise.CipherState
+	writeNonce uint64
+	usedNonces map[uint64]uint8
 }
 
 func (arq *securityExtension) addExtension(extension Connector) {
@@ -66,29 +64,15 @@ func (sec *securityExtension) Read(buffer []byte) (statusCode, int, error) {
 	return statusCode, len(decryptedMsg), err
 }
 
-// Ensures the received nonce is valid, i.e. a nonce that hasn't been used before.
-// To account for packet loss or wrong order, all skipped nonces are saved in a set
-// that is updated accordingly as nonces are used
+// Checks if the received nonce has been used before and returns an appropriate
+// status code
 func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
-	if nonce > sec.readNonce {
-		for i := sec.readNonce + 1; i < nonce; i++ {
-			sec.missingNonces.Add(i)
-		}
-		sec.readNonce = nonce
-		return success
-	} else {
-		it := sec.missingNonces.Iterator()
-		for n := range it.C {
-			if n.(uint64) == nonce {
-				it.Stop()
-				sec.missingNonces.Remove(n)
-				sec.readNonce = nonce
-				return success
-			}
-		}
-		it.Stop()
+	if _, ok := sec.usedNonces[nonce]; ok {
+		return invalidNonce
 	}
-	return invalidNonce
+	sec.usedNonces[nonce] = 1
+	return success
+
 }
 
 func (sec *securityExtension) initiateHandshake() {
@@ -104,7 +88,7 @@ func (sec *securityExtension) initiateHandshake() {
 	sec.writeHandshakeMessage()
 	sec.readHandshakeMessage()
 	sec.encrypter, sec.decrypter = sec.writeHandshakeMessage()
-	sec.missingNonces = mapset.NewSet(uint64(0))
+	sec.usedNonces = make(map[uint64]uint8)
 }
 
 func (sec *securityExtension) acceptHandshake() {
@@ -120,7 +104,7 @@ func (sec *securityExtension) acceptHandshake() {
 	sec.readHandshakeMessage()
 	sec.writeHandshakeMessage()
 	sec.decrypter, sec.encrypter = sec.readHandshakeMessage()
-	sec.missingNonces = mapset.NewSet(uint64(0))
+	sec.usedNonces = make(map[uint64]uint8)
 }
 
 func (sec *securityExtension) writeHandshakeMessage() (*noise.CipherState, *noise.CipherState) {
