@@ -8,7 +8,7 @@ import (
 
 type SecurityTestSuite struct {
 	suite.Suite
-	alphaConnection, betaConnection *securityExtension
+	alphaConnection, betaConnection Connector
 }
 
 func (suite *SecurityTestSuite) SetupTest() {
@@ -23,15 +23,15 @@ func (suite *SecurityTestSuite) TearDownTest() {
 
 func (suite *SecurityTestSuite) mockConnections() {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
-	connector1, connector2 := &channelConnector{
+	alphaConnector, betaConnector := &channelConnector{
 		in:  endpoint1,
 		out: endpoint2,
 	}, &channelConnector{
 		in:  endpoint2,
 		out: endpoint1,
 	}
-	suite.alphaConnection = &securityExtension{connector: connector1}
-	suite.betaConnection = &securityExtension{connector: connector2}
+	suite.alphaConnection = &securityExtension{connector: alphaConnector}
+	suite.betaConnection = &securityExtension{connector: betaConnector}
 }
 
 func (suite *SecurityTestSuite) handleTestError(err error) {
@@ -41,7 +41,6 @@ func (suite *SecurityTestSuite) handleTestError(err error) {
 }
 
 func (suite *SecurityTestSuite) TestSecurityExtension_ExchangeGreeting() {
-	suite.mockConnections()
 	expected := "Hello, World!"
 
 	group := sync.WaitGroup{}
@@ -63,7 +62,6 @@ func (suite *SecurityTestSuite) TestSecurityExtension_ExchangeGreeting() {
 	}()
 
 	group.Wait()
-
 }
 
 func TestSecurityExtension(t *testing.T) {
