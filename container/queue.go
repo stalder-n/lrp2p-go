@@ -1,15 +1,21 @@
-package protocol
+package container
 
 import (
 	"bytes"
 	"container/list"
 	"encoding/binary"
+	. "go-protocol/lowlevel"
 	"reflect"
 )
 
 type Queue struct {
 	list        list.List
 	elementType reflect.Type
+}
+
+func (q *Queue) New() *Queue {
+	q.list.Init()
+	return q
 }
 
 func (q *Queue) setType(value interface{}) {
@@ -20,7 +26,7 @@ func (q *Queue) setType(value interface{}) {
 
 func (q *Queue) checkType(value interface{}) {
 	if reflect.TypeOf(value).Name() != q.elementType.Name() {
-		panic("TypeOf value and TypeOf Queue does not match")
+		panic("TypeOf value and TypeOf container does not match")
 	}
 }
 
@@ -72,8 +78,8 @@ func (q *Queue) GetElementGreaterSequenceNumber(sequenceNumber uint32) *list.Lis
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(segment)
-		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == 1 {
+		seg := ele.Value.(Segment)
+		if bytes.Compare(seg.SequenceNumber, sequenceNumberBytes) == 1 {
 			sl.PushBack(seg)
 		}
 	}
@@ -93,8 +99,8 @@ func (q *Queue) GetElementsSmallerSequenceNumber(sequenceNumber uint32) *list.Li
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(segment)
-		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == -1 {
+		seg := ele.Value.(Segment)
+		if bytes.Compare(seg.SequenceNumber, sequenceNumberBytes) == -1 {
 			sl.PushBack(seg)
 		}
 	}
@@ -108,8 +114,8 @@ func (q *Queue) GetElementsEqualSequenceNumber(sequenceNumber uint32) *list.List
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(segment)
-		if bytes.Compare(seg.sequenceNumber, sequenceNumberBytes) == 0 {
+		seg := ele.Value.(Segment)
+		if bytes.Compare(seg.SequenceNumber, sequenceNumberBytes) == 0 {
 			sl.PushBack(seg)
 		}
 	}
@@ -127,8 +133,8 @@ func (q *Queue) RemoveElementsInRangeSequenceNumberIncluded(sequenceNumberRange 
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(segment)
-		if bytes.Compare(seg.sequenceNumber, lowersequenceNumberBytes) >= 0 || bytes.Compare(seg.sequenceNumber, highersequenceNumberBytes) <= 0 {
+		seg := ele.Value.(Segment)
+		if bytes.Compare(seg.SequenceNumber, lowersequenceNumberBytes) >= 0 || bytes.Compare(seg.SequenceNumber, highersequenceNumberBytes) <= 0 {
 			sl.PushBack(seg)
 			q.list.Remove(ele)
 		}

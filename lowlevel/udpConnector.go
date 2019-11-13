@@ -1,4 +1,4 @@
-package protocol
+package lowlevel
 
 import (
 	"net"
@@ -41,12 +41,12 @@ func (connector *udpConnector) Close() error {
 	return receiverError
 }
 
-func (connector *udpConnector) Write(buffer []byte) (statusCode, int, error) {
+func (connector *udpConnector) Write(buffer []byte) (StatusCode, int, error) {
 	n, err := connector.udpSender.Write(buffer)
-	return success, n, err
+	return Success, n, err
 }
 
-func (connector *udpConnector) Read(buffer []byte) (statusCode, int, error) {
+func (connector *udpConnector) Read(buffer []byte) (StatusCode, int, error) {
 	n, err := connector.udpReceiver.Read(buffer)
-	return success, n, err
+	return Success, n, err
 }

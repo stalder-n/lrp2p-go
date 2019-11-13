@@ -1,4 +1,4 @@
-package protocol
+package lowlevel
 
 import (
 	"crypto/rand"
@@ -7,25 +7,29 @@ import (
 )
 
 type Connector interface {
-	Read([]byte) (statusCode, int, error)
-	Write([]byte) (statusCode, int, error)
+	Read([]byte) (StatusCode, int, error)
+	Write([]byte) (StatusCode, int, error)
 	Open() error
 	Close() error
 }
 
-var sequenceNumberFactory = func() uint32 {
+var SequenceNumberFactory = func() uint32 {
 	b := make([]byte, 4)
 	_, err := rand.Read(b)
 	handleError(err)
-	sequenceNum := bytesToUint32(b)
+	sequenceNum := BytesToUint32(b)
 	if sequenceNum == 0 {
 		sequenceNum++
 	}
 	return sequenceNum
 }
 
-func hasSegmentTimedOut(seg *segment) bool {
-	timeout := seg.timestamp.Add(RetransmissionTimeout)
+func HasSegmentTimedOut(seg *Segment) bool {
+	if seg == nil {
+		return false
+	}
+	
+	timeout := seg.Timestamp.Add(RetransmissionTimeout)
 	return time.Now().After(timeout)
 }
 

@@ -1,4 +1,4 @@
-package protocol
+package lowlevel
 
 import "time"
 
@@ -12,15 +12,15 @@ const (
 	HeaderLength = 6
 )
 
-type statusCode int
+type StatusCode int
 
 const (
-	success statusCode = iota
-	fail
-	ackReceived
+	Success StatusCode = iota
+	Fail
+	AckReceived
 	pendingSegments
-	invalidSegment
-	windowFull
+	InvalidSegment
+	WindowFull
 )
 
 type Position struct {
