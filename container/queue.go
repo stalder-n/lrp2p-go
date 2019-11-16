@@ -1,20 +1,20 @@
 package container
 
 import (
-	"bytes"
 	"container/list"
-	"encoding/binary"
-	. "go-protocol/lowlevel"
 	"reflect"
 )
 
 type Queue struct {
-	list        list.List
+	list        *list.List
 	elementType reflect.Type
 }
 
-func (q *Queue) New() *Queue {
+func NewQueue() *Queue {
+	q := &Queue{}
+	q.list = &list.List{}
 	q.list.Init()
+
 	return q
 }
 
@@ -26,7 +26,7 @@ func (q *Queue) setType(value interface{}) {
 
 func (q *Queue) checkType(value interface{}) {
 	if reflect.TypeOf(value).Name() != q.elementType.Name() {
-		panic("TypeOf value and TypeOf container does not match")
+		panic("TypeOf value and TypeOf container does not match: '" + reflect.TypeOf(value).Name() + "' '" + q.elementType.Name() + "'")
 	}
 }
 
@@ -34,6 +34,10 @@ func (q *Queue) Enqueue(value interface{}) {
 	q.setType(value)
 	q.checkType(value)
 	q.list.PushBack(value)
+}
+
+func (q *Queue) EnqueueList(queue *Queue) {
+	q.list.PushBackList(queue.list)
 }
 
 func (q *Queue) PushFront(value interface{}) {
@@ -71,72 +75,12 @@ func (q *Queue) Len() int {
 	return q.list.Len()
 }
 
-//TODO make generic or refactor
-func (q *Queue) GetElementGreaterSequenceNumber(sequenceNumber uint32) *list.List {
-	var sequenceNumberBytes = make([]byte, 4)
-	binary.BigEndian.PutUint32(sequenceNumberBytes, sequenceNumber)
+func (q *Queue) SearchBy(comparator func(interface{}) bool) *list.List {
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(Segment)
-		if bytes.Compare(seg.SequenceNumber, sequenceNumberBytes) == 1 {
-			sl.PushBack(seg)
-		}
-	}
-
-	return sl
-}
-
-func (q *Queue) GetElementsGreaterOrEqualsSequenceNumber(sequenceNumber uint32) *list.List {
-	result := q.GetElementGreaterSequenceNumber(sequenceNumber)
-	result.PushFrontList(q.GetElementsEqualSequenceNumber(sequenceNumber))
-	return result
-}
-
-func (q *Queue) GetElementsSmallerSequenceNumber(sequenceNumber uint32) *list.List {
-	var sequenceNumberBytes = make([]byte, 4)
-	binary.BigEndian.PutUint32(sequenceNumberBytes, sequenceNumber)
-	sl := list.New()
-
-	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(Segment)
-		if bytes.Compare(seg.SequenceNumber, sequenceNumberBytes) == -1 {
-			sl.PushBack(seg)
-		}
-	}
-
-	return sl
-}
-
-func (q *Queue) GetElementsEqualSequenceNumber(sequenceNumber uint32) *list.List {
-	var sequenceNumberBytes = make([]byte, 4)
-	binary.BigEndian.PutUint32(sequenceNumberBytes, sequenceNumber)
-	sl := list.New()
-
-	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(Segment)
-		if bytes.Compare(seg.SequenceNumber, sequenceNumberBytes) == 0 {
-			sl.PushBack(seg)
-		}
-	}
-
-	return sl
-}
-
-func (q *Queue) RemoveElementsInRangeSequenceNumberIncluded(sequenceNumberRange Position) *list.List {
-	var lowersequenceNumberBytes = make([]byte, 4)
-	var highersequenceNumberBytes = make([]byte, 4)
-
-	binary.BigEndian.PutUint32(lowersequenceNumberBytes, uint32(sequenceNumberRange.Start))
-	binary.BigEndian.PutUint32(highersequenceNumberBytes, uint32(sequenceNumberRange.End))
-
-	sl := list.New()
-
-	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
-		seg := ele.Value.(Segment)
-		if bytes.Compare(seg.SequenceNumber, lowersequenceNumberBytes) >= 0 || bytes.Compare(seg.SequenceNumber, highersequenceNumberBytes) <= 0 {
-			sl.PushBack(seg)
-			q.list.Remove(ele)
+		if comparator(ele.Value) {
+			sl.PushBack(ele.Value)
 		}
 	}
 

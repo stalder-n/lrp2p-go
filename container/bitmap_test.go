@@ -5,27 +5,41 @@ import (
 	"testing"
 )
 
-func TestBitmap_Set(t *testing.T) {
+func TestBitmap_AddRemove(t *testing.T) {
 	b := New(3)
 
-	b.Set(0, 1)
-	b.Set(1, 0)
-	b.Set(2, 3)
+	b.Add(0)
+	b.Add(2)
 
 	assert.Equal(t, uint32(1), b.data[0])
 	assert.Equal(t, uint32(0), b.data[1])
 	assert.Equal(t, uint32(1), b.data[2])
 
-	b.Set(0, 0)
+	b.Remove(0)
 	assert.Equal(t, uint32(0), b.data[0])
+
+}
+
+func TestBitmap_Len(t *testing.T) {
+	b := New(3)
+
+	b.Add(0)
+	b.Add(2)
+
+	assert.Equal(t, uint32(2), b.Len())
+
+	b.Remove(0)
+	assert.Equal(t, uint32(1), b.Len())
+
+	b.Remove(2)
+	assert.Equal(t, uint32(0), b.Len())
 
 }
 
 func TestBitmap_Get(t *testing.T) {
 	b := New(3)
-	b.Set(0, 1)
-	b.Set(1, 0)
-	b.Set(2, 3)
+	b.Add(0)
+	b.Add(2)
 
 	assert.Equal(t, uint32(1), b.Get(0))
 	assert.Equal(t, uint32(0), b.Get(1))
@@ -34,16 +48,16 @@ func TestBitmap_Get(t *testing.T) {
 
 func TestBitmap_ToNumber(t *testing.T) {
 	b := New(3)
-	b.Set(0, 1)
-	b.Set(1, 0)
-	b.Set(2, 1)
+	b.Add(0)
+	b.Remove(1)
+	b.Add(2)
 
 	assert.Equal(t, uint32(5), b.ToNumber())
 
 	b2 := New(3)
-	b2.Set(0, 1)
-	b2.Set(1, 1)
-	b2.Set(2, 0)
+	b2.Add(0)
+	b2.Add(1)
+	b2.Remove(2)
 
 	assert.Equal(t, uint32(3), b2.ToNumber())
 }

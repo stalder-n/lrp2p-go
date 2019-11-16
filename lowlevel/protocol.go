@@ -28,7 +28,7 @@ func HasSegmentTimedOut(seg *Segment) bool {
 	if seg == nil {
 		return false
 	}
-	
+
 	timeout := seg.Timestamp.Add(RetransmissionTimeout)
 	return time.Now().After(timeout)
 }

@@ -31,7 +31,7 @@ type GoBackNArqTestSuite struct {
 	suite.Suite
 	alphaArq, betaArq                 *goBackNArq
 	alphaManipulator, betaManipulator *SegmentManipulator
-	sequenceNumberQueue               Queue
+	sequenceNumberQueue               *Queue
 }
 
 func (suite *GoBackNArqTestSuite) handleTestError(err error) {
@@ -51,7 +51,7 @@ func (suite *GoBackNArqTestSuite) SetupTest() {
 	suite.alphaArq, suite.alphaManipulator = newMockConnection(connector1, "alpha")
 	suite.betaArq, suite.betaManipulator = newMockConnection(connector2, "beta")
 
-	suite.sequenceNumberQueue = Queue{}
+	suite.sequenceNumberQueue = NewQueue()
 	suite.sequenceNumberQueue.Enqueue(uint32(1))
 	suite.sequenceNumberQueue.Enqueue(uint32(2))
 
