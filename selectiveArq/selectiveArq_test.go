@@ -126,7 +126,7 @@ func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 	suite.Nil(error)
 }
 
-func (suite *SelectiveArqTestSuite) TestSending() {
+func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	SegmentMtu = HeaderLength + 4
 	suite.alphaArq.windowSize = 8
 	suite.alphaArq.Open()
@@ -141,7 +141,7 @@ func (suite *SelectiveArqTestSuite) TestSending() {
 	suite.Equal(WindowFull, status)
 }
 
-func (suite *SelectiveArqTestSuite) TestACKs() {
+func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	SegmentMtu = HeaderLength + 4
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
@@ -165,13 +165,66 @@ func (suite *SelectiveArqTestSuite) TestACKs() {
 	suite.betaArq.Read(readBuffer)
 
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(2), BytesToUint32(readBuffer))
+
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(6), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(14), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(30), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(62), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(126), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(254), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), BytesToUint32(readBuffer))
+
+}
+
+func (suite *SelectiveArqTestSuite) TestReadingACKs() {
+	SegmentMtu = HeaderLength + 4
+	suite.alphaArq.windowSize = 8
+	suite.betaArq.windowSize = 8
+
+	suite.alphaArq.Open()
+	suite.betaArq.Open()
+
+	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	writeBuffer := []byte(message)
+	readBuffer := make([]byte, SegmentMtu)
+
+	suite.alphaArq.Write(writeBuffer)
+
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer)
+
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
+
 }
 
 func (suite *SelectiveArqTestSuite) disabled_TestSelectiveAckDropFourOfEight() {

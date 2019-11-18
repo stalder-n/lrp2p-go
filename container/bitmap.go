@@ -4,7 +4,6 @@ import "strconv"
 
 type Bitmap struct {
 	data []uint32
-	len  uint32
 }
 
 func New(size uint32) *Bitmap {
@@ -18,14 +17,12 @@ func (m *Bitmap) Add(value uint32) {
 	index := value % uint32(len(m.data))
 
 	m.data[index] = 1
-	m.len++
 }
 
 func (m *Bitmap) Remove(value uint32) {
 	index := value % uint32(len(m.data))
 
 	m.data[index] = 0
-	m.len--
 }
 
 func (m *Bitmap) Get(index uint32) uint32 {
@@ -61,8 +58,6 @@ func (m *Bitmap) Init(number uint32) {
 
 		i++
 	}
-
-	m.len = i
 }
 
 func (m *Bitmap) set(index uint32, value uint32) {
@@ -72,8 +67,4 @@ func (m *Bitmap) set(index uint32, value uint32) {
 	}
 
 	m.data[index] = value
-}
-
-func (m *Bitmap) Len() uint32 {
-	return m.len
 }

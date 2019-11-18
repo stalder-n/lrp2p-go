@@ -102,7 +102,6 @@ func (arq *selectiveArq) Write(buffer []byte) (StatusCode, int, error) {
 	for !newSegmentQueue.IsEmpty() && arq.window < arq.windowSize {
 		ele := newSegmentQueue.Dequeue()
 		arq.readyToSendSegmentQueue.Enqueue(ele)
-		arq.notAckedBitmap.Add(ele.(*Segment).GetSequenceNumber())
 		arq.window++
 	}
 
@@ -150,8 +149,11 @@ func (arq *selectiveArq) handleSelectiveAck(seg *Segment) {
 
 	for i := uint32(0); i < arq.windowSize; i++ {
 		ele := ackedSequenceNumberBitmap.Get(i)
-		if ele == 1 {
+		if ele == 1 && arq.notAckedBitmap.Get(i) != 0 {
+			seg := arq.notAckedSegment[i]
 			arq.notAckedSegment[i] = nil
+			arq.notAckedBitmap.Remove(seg.GetSequenceNumber())
+
 			arq.window--
 		}
 	}
