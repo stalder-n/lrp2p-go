@@ -89,13 +89,13 @@ func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
 }
 
 func (sec *securityExtension) initiateHandshake() {
-	sec.determineHandshakePattern()
+	sec.determineHandshakeStrategy()
 	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), true)
 	sec.strategy.initiate()
 }
 
 func (sec *securityExtension) acceptHandshake() {
-	sec.determineHandshakePattern()
+	sec.determineHandshakeStrategy()
 	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), false)
 	sec.strategy.accept()
 }
@@ -115,7 +115,7 @@ func (sec *securityExtension) readHandshakeMessage() (*noise.CipherState, *noise
 	return cs0, cs1
 }
 
-func (sec *securityExtension) determineHandshakePattern() {
+func (sec *securityExtension) determineHandshakeStrategy() {
 	if sec.peerKey != nil {
 		sec.strategy = &handshakeKKStrategy{sec}
 	} else {
