@@ -9,15 +9,29 @@ import (
 
 type securityExtension struct {
 	connector  Connector
+	strategy   handshakeStrategy
 	handshake  *noise.HandshakeState
 	encrypter  *noise.CipherState
 	decrypter  *noise.CipherState
+	key        *noise.DHKey
+	peerKey    []byte
 	writeNonce uint64
 	usedNonces map[uint64]uint8
 }
 
-func (arq *securityExtension) addExtension(extension Connector) {
-	arq.connector = extension
+func newSecurityExtension(connector Connector, key *noise.DHKey, peerKey []byte) *securityExtension {
+	newSec := &securityExtension{
+		connector:  connector,
+		writeNonce: 0,
+		key:        key,
+		peerKey:    peerKey,
+		usedNonces: make(map[uint64]uint8),
+	}
+	return newSec
+}
+
+func (sec *securityExtension) addExtension(extension Connector) {
+	sec.connector = extension
 }
 
 func (sec *securityExtension) Open() error {
@@ -58,7 +72,6 @@ func (sec *securityExtension) Read(buffer []byte) (statusCode, int, error) {
 	if nonceStatus != success {
 		return nonceStatus, 0, nil
 	}
-
 	decryptedMsg, err := sec.decrypter.Cipher().Decrypt(nil, nonce, nil, encrypted[8:n])
 	copy(buffer, decryptedMsg)
 	return statusCode, len(decryptedMsg), err
@@ -76,35 +89,15 @@ func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
 }
 
 func (sec *securityExtension) initiateHandshake() {
-	suite := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
-	key, _ := suite.GenerateKeypair(rand.Reader)
-	sec.handshake, _ = noise.NewHandshakeState(noise.Config{
-		CipherSuite:   suite,
-		Random:        rand.Reader,
-		Pattern:       noise.HandshakeXX,
-		Initiator:     true,
-		StaticKeypair: key,
-	})
-	sec.writeHandshakeMessage()
-	sec.readHandshakeMessage()
-	sec.encrypter, sec.decrypter = sec.writeHandshakeMessage()
-	sec.usedNonces = make(map[uint64]uint8)
+	sec.determineHandshakePattern()
+	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), true)
+	sec.strategy.initiate()
 }
 
 func (sec *securityExtension) acceptHandshake() {
-	suite := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
-	key, _ := suite.GenerateKeypair(rand.Reader)
-	sec.handshake, _ = noise.NewHandshakeState(noise.Config{
-		CipherSuite:   suite,
-		Random:        rand.Reader,
-		Pattern:       noise.HandshakeXX,
-		Initiator:     false,
-		StaticKeypair: key,
-	})
-	sec.readHandshakeMessage()
-	sec.writeHandshakeMessage()
-	sec.decrypter, sec.encrypter = sec.readHandshakeMessage()
-	sec.usedNonces = make(map[uint64]uint8)
+	sec.determineHandshakePattern()
+	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), false)
+	sec.strategy.accept()
 }
 
 func (sec *securityExtension) writeHandshakeMessage() (*noise.CipherState, *noise.CipherState) {
@@ -122,8 +115,79 @@ func (sec *securityExtension) readHandshakeMessage() (*noise.CipherState, *noise
 	return cs0, cs1
 }
 
+func (sec *securityExtension) determineHandshakePattern() {
+	if sec.peerKey != nil {
+		sec.strategy = &handshakeKKStrategy{sec}
+	} else {
+		sec.strategy = &handshakeXXStrategy{sec}
+	}
+}
+
+func createHandshakeState(keyRef *noise.DHKey, peerKey []byte, handshakePattern noise.HandshakePattern, isInitiator bool) *noise.HandshakeState {
+	suite := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
+	var key noise.DHKey
+	if keyRef == nil {
+		key, _ = suite.GenerateKeypair(rand.Reader)
+	} else {
+		key = *keyRef
+	}
+	handshake, _ := noise.NewHandshakeState(noise.Config{
+		CipherSuite:   suite,
+		Random:        rand.Reader,
+		Pattern:       handshakePattern,
+		Initiator:     isInitiator,
+		StaticKeypair: key,
+		PeerStatic:    peerKey,
+	})
+	return handshake
+}
+
 func reportError(err error) {
 	if err != nil {
 		log.Println(err)
 	}
+}
+
+type handshakeStrategy interface {
+	initiate()
+	accept()
+	getPattern() noise.HandshakePattern
+}
+
+type handshakeXXStrategy struct {
+	sec *securityExtension
+}
+
+func (h *handshakeXXStrategy) initiate() {
+	h.sec.writeHandshakeMessage()
+	h.sec.readHandshakeMessage()
+	h.sec.encrypter, h.sec.decrypter = h.sec.writeHandshakeMessage()
+}
+
+func (h *handshakeXXStrategy) accept() {
+	h.sec.readHandshakeMessage()
+	h.sec.writeHandshakeMessage()
+	h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage()
+}
+
+func (h *handshakeXXStrategy) getPattern() noise.HandshakePattern {
+	return noise.HandshakeXX
+}
+
+type handshakeKKStrategy struct {
+	sec *securityExtension
+}
+
+func (h *handshakeKKStrategy) initiate() {
+	h.sec.writeHandshakeMessage()
+	h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage()
+}
+
+func (h *handshakeKKStrategy) accept() {
+	h.sec.readHandshakeMessage()
+	h.sec.decrypter, h.sec.encrypter = h.sec.writeHandshakeMessage()
+}
+
+func (h *handshakeKKStrategy) getPattern() noise.HandshakePattern {
+	return noise.HandshakeKK
 }

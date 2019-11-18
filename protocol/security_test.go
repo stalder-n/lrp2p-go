@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"crypto/rand"
+	"github.com/flynn/noise"
 	"github.com/stretchr/testify/suite"
 	"sync"
 	"testing"
@@ -8,11 +10,7 @@ import (
 
 type SecurityTestSuite struct {
 	suite.Suite
-	alphaConnection, betaConnection Connector
-}
-
-func (suite *SecurityTestSuite) SetupTest() {
-	suite.mockConnections()
+	alphaConnection, betaConnection *securityExtension
 }
 
 func (suite *SecurityTestSuite) TearDownTest() {
@@ -21,7 +19,7 @@ func (suite *SecurityTestSuite) TearDownTest() {
 	setSegmentMtu(defaultSegmentMtu)
 }
 
-func (suite *SecurityTestSuite) mockConnections() {
+func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	alphaConnector, betaConnector := &channelConnector{
 		in:  endpoint1,
@@ -30,19 +28,21 @@ func (suite *SecurityTestSuite) mockConnections() {
 		in:  endpoint2,
 		out: endpoint1,
 	}
-	suite.alphaConnection = &securityExtension{connector: alphaConnector}
-	suite.betaConnection = &securityExtension{connector: betaConnector}
-}
 
-func (suite *SecurityTestSuite) handleTestError(err error) {
-	if err != nil {
-		suite.Errorf(err, "Error occurred")
+	cipherSuite := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
+	alphaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
+	betaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
+	if peerKeyKnown {
+		suite.alphaConnection = newSecurityExtension(alphaConnector, &alphaKey, betaKey.Public)
+		suite.betaConnection = newSecurityExtension(betaConnector, &betaKey, alphaKey.Public)
+	} else {
+		suite.alphaConnection = newSecurityExtension(alphaConnector, &alphaKey, nil)
+		suite.betaConnection = newSecurityExtension(betaConnector, &betaKey, nil)
 	}
 }
 
-func (suite *SecurityTestSuite) TestSecurityExtension_ExchangeGreeting() {
+func (suite *SecurityTestSuite) exchangeGreeting() {
 	expected := "Hello, World!"
-
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {
@@ -52,7 +52,6 @@ func (suite *SecurityTestSuite) TestSecurityExtension_ExchangeGreeting() {
 		suite.Equal(expected, string(buf[:n]))
 		group.Done()
 	}()
-
 	go func() {
 		buf := make([]byte, segmentMtu)
 		_, n, _ := suite.betaConnection.Read(buf)
@@ -60,8 +59,22 @@ func (suite *SecurityTestSuite) TestSecurityExtension_ExchangeGreeting() {
 		_, _, _ = suite.betaConnection.Write([]byte(expected))
 		group.Done()
 	}()
-
 	group.Wait()
+}
+
+func (suite *SecurityTestSuite) handleTestError(err error) {
+	if err != nil {
+		suite.Errorf(err, "Error occurred")
+	}
+}
+func (suite *SecurityTestSuite) TestExchangeGreeting() {
+	suite.mockConnections(false)
+	suite.exchangeGreeting()
+}
+
+func (suite *SecurityTestSuite) TestExchangeGreetingWithKnownPeerKey() {
+	suite.mockConnections(true)
+	suite.exchangeGreeting()
 }
 
 func TestSecurityExtension(t *testing.T) {
