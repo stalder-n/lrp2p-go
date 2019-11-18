@@ -6,8 +6,8 @@ import (
 )
 
 func main() {
-	connection1 := UdpConnect("localhost", 3030, 3031)
-	connection2 := UdpConnect("localhost", 3031, 3030)
+	connection1 := Connect("localhost", 3030, 3031)
+	connection2 := Connect("localhost", 3031, 3030)
 	defer connection1.Close()
 	defer connection2.Close()
 	connection1.Open()
@@ -22,7 +22,7 @@ func main() {
 	}()
 	for {
 		buf := make([]byte, 64)
-		_, n, _ := connection2.Read(buf)
+		n, _ := connection2.Read(buf)
 		fmt.Println("received:", string(buf[:n]))
 	}
 }

@@ -96,21 +96,12 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 	return udpAddress
 }
 
-func Connect(connector Connector) Connector {
+func connect(connector Connector) Connector {
 	arq := &goBackNArq{}
 	sec := &securityExtension{}
 	arq.addExtension(sec)
 	sec.addExtension(connector)
 	return arq
-}
-
-func UdpConnect(address string, senderPort, receiverPort int) Connector {
-	var connector Connector = &udpConnector{
-		senderAddress: address,
-		senderPort:    senderPort,
-		receiverPort:  receiverPort,
-	}
-	return Connect(connector)
 }
 
 func handleError(err error) {
