@@ -14,9 +14,9 @@ func newMockSelectiveArqConnection(connector *ChannelConnector, name string) (*s
 	printer := &ConsolePrinter{Name: name}
 	manipulator := &SegmentManipulator{}
 
-	arq.addExtension(printer)
-	printer.AddExtension(manipulator)
-	manipulator.AddExtension(connector)
+	arq.addExtension(manipulator)
+	manipulator.AddExtension(printer)
+	printer.AddExtension(connector)
 
 	fu := func() uint32 {
 		return 1
@@ -86,12 +86,12 @@ func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 	arq := selectiveArq{}
 	arq.Open()
 
-	time := time.Now()
+	currentTime := time.Now()
 
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: time.Add(-1), SequenceNumber: []byte{0, 0, 0, 1}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: time.Add(-1), SequenceNumber: []byte{0, 0, 0, 2}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: time.Add(-1), SequenceNumber: []byte{0, 0, 0, 3}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: time.Add(20000), SequenceNumber: []byte{0, 0, 0, 4}})
+	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 1}})
+	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 2}})
+	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 3}})
+	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(20000), SequenceNumber: []byte{0, 0, 0, 4}})
 	arq.queueTimedOutSegmentsForWrite()
 
 	i := uint32(1)
@@ -104,26 +104,26 @@ func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 }
 func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 
-	time := time.Now()
+	currentTime := time.Now()
 
 	seg1 := CreateFlaggedSegment(1, 0, []byte("test"))
-	seg1.Timestamp = time.Add(-1)
+	seg1.Timestamp = currentTime.Add(-1)
 	seg2 := CreateFlaggedSegment(2, 0, []byte("test"))
-	seg2.Timestamp = time.Add(-1)
+	seg2.Timestamp = currentTime.Add(-1)
 	seg3 := CreateFlaggedSegment(3, 0, []byte("test"))
-	seg3.Timestamp = time.Add(-1)
+	seg3.Timestamp = currentTime.Add(-1)
 	seg4 := CreateFlaggedSegment(4, 0, []byte("test"))
-	seg4.Timestamp = time.Add(20000)
+	seg4.Timestamp = currentTime.Add(20000)
 
 	suite.alphaArq.readyToSendSegmentQueue.Enqueue(seg1)
 	suite.alphaArq.readyToSendSegmentQueue.Enqueue(seg2)
 	suite.alphaArq.readyToSendSegmentQueue.Enqueue(seg3)
 	suite.alphaArq.readyToSendSegmentQueue.Enqueue(seg4)
 
-	_, _, error := suite.alphaArq.writeQueuedSegments()
+	_, _, err := suite.alphaArq.writeQueuedSegments()
 
 	suite.True(suite.alphaArq.readyToSendSegmentQueue.IsEmpty())
-	suite.Nil(error)
+	suite.Nil(err)
 }
 
 func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
@@ -168,23 +168,22 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	suite.Equal(uint32(2), BytesToUint32(readBuffer))
 
 	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(3), BytesToUint32(readBuffer))
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(4), BytesToUint32(readBuffer))
+	suite.alphaArq.Read(readBuffer)
+	suite.Equal(uint32(5), BytesToUint32(readBuffer))
+	suite.alphaArq.Read(readBuffer)
 	suite.Equal(uint32(6), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(14), BytesToUint32(readBuffer))
+	suite.Equal(uint32(7), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(30), BytesToUint32(readBuffer))
+	suite.Equal(uint32(8), BytesToUint32(readBuffer))
 	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(62), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(126), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(254), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), BytesToUint32(readBuffer))
-
+	suite.Equal(uint32(9), BytesToUint32(readBuffer))
 }
 
-func (suite *SelectiveArqTestSuite) TestReadingACKs() {
+func (suite *SelectiveArqTestSuite) TestSelectiveAckDropTwoOfEight() {
 	SegmentMtu = HeaderLength + 4
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
@@ -192,88 +191,45 @@ func (suite *SelectiveArqTestSuite) TestReadingACKs() {
 	suite.alphaArq.Open()
 	suite.betaArq.Open()
 
+	suite.alphaManipulator.DropOnce(4)
+	suite.alphaManipulator.DropOnce(5)
+
 	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, SegmentMtu)
 
 	suite.alphaArq.Write(writeBuffer)
 
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-	suite.alphaArq.Read(readBuffer)
-	suite.Equal(uint32(255), suite.alphaArq.notAckedBitmap.ToNumber())
-
-}
-
-func (suite *SelectiveArqTestSuite) disabled_TestSelectiveAckDropFourOfEight() {
-	SegmentMtu = HeaderLength + 4
-
-	suite.alphaManipulator.DropOnce(5)
-	suite.alphaManipulator.DropOnce(6)
-	suite.alphaManipulator.DropOnce(7)
-
-	RetransmissionTimeout = 20 * time.Millisecond
-	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
-	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
-	suite.write(suite.alphaArq, writeBuffer)
 	suite.read(suite.betaArq, "ABCD", readBuffer)
-	suite.readAck(suite.alphaArq, readBuffer)
 	suite.read(suite.betaArq, "EFGH", readBuffer)
-	suite.readAck(suite.alphaArq, readBuffer)
 	suite.read(suite.betaArq, "IJKL", readBuffer)
+	suite.read(suite.betaArq, "", readBuffer)
+	suite.read(suite.betaArq, "", readBuffer)
+	suite.read(suite.betaArq, "", readBuffer)
+
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.read(suite.betaArq, "MNOP", readBuffer)
+	suite.Equal(uint32(2), BytesToUint32(readBuffer))
+
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.readExpectStatus(suite.betaArq, 4, readBuffer)
+	suite.Equal(uint32(3), BytesToUint32(readBuffer))
+
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.read(suite.betaArq, "QRST", readBuffer)
+	suite.Equal(uint32(4), BytesToUint32(readBuffer))
+
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.read(suite.betaArq, "UVWX", readBuffer)
+	suite.Equal(uint32(4), BytesToUint32(readBuffer))
+
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.read(suite.betaArq, "YZ12", readBuffer)
+	suite.Equal(uint32(4), BytesToUint32(readBuffer))
+
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.read(suite.betaArq, "3456", readBuffer)
-	suite.readAck(suite.alphaArq, readBuffer)
+	suite.Equal(uint32(4), BytesToUint32(readBuffer))
 }
 
-func (suite *SelectiveArqTestSuite) disabled_TestSendInOneSegmentSelectiveACK() {
-	message := "Hello, World!"
-	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
-
-	alpha := selectiveArq{}
-	alpha.addExtension(suite.alphaArq.extension)
-	beta := selectiveArq{}
-	beta.addExtension(suite.betaArq.extension)
-	suite.alphaArq = &alpha
-	suite.betaArq = &beta
-	suite.write(suite.alphaArq, writeBuffer)
-	suite.read(suite.betaArq, message, readBuffer)
-	suite.readAck(suite.alphaArq, readBuffer)
+func (suite *SelectiveArqTestSuite) TestHandleSelectiveAckAndResend() {
+	suite.FailNow("TODO")
 }
+
 
 func TestSelectiveArq(t *testing.T) {
 	suite.Run(t, new(SelectiveArqTestSuite))

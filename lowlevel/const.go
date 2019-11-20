@@ -33,15 +33,3 @@ var FlagPosition = Position{1, 2}
 var SequencenumberPosition = Position{2, 6}
 
 var RetransmissionTimeout = 200 * time.Millisecond
-
-func Max(first uint32, second uint32) uint32 {
-	var max uint32
-
-	if first >= second {
-		max = first
-	} else {
-		max = second
-	}
-
-	return max
-}

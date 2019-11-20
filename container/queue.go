@@ -18,12 +18,14 @@ func NewQueue() *Queue {
 	return q
 }
 
+//TODO Conditional compilation in Golang - http://blog.ralch.com/tutorial/golang-conditional-compilation/
 func (q *Queue) setType(value interface{}) {
 	if q.elementType == nil {
 		q.elementType = reflect.TypeOf(value)
 	}
 }
 
+//TODO Conditional compilation in Golang
 func (q *Queue) checkType(value interface{}) {
 	if reflect.TypeOf(value).Name() != q.elementType.Name() {
 		panic("TypeOf value and TypeOf container does not match: '" + reflect.TypeOf(value).Name() + "' '" + q.elementType.Name() + "'")

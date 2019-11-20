@@ -103,8 +103,11 @@ func CreateAckSegment(sequenceNumber uint32, receivedSequenceNumber uint32) *Seg
 	return CreateFlaggedSegment(sequenceNumber, FlagACK, receivedSequenceNumberBytes)
 }
 
-func CreateSelectiveAckSegment(sequenceNumber uint32, data uint32) *Segment {
-	return CreateFlaggedSegment(sequenceNumber, FlagSelectiveACK, uint32ToBytes(data))
+func CreateSelectiveAckSegment(sequenceNumber uint32, bitmap *Bitmap) *Segment {
+	first := uint32ToBytes(bitmap.SeqNumber)
+	second := uint32ToBytes(bitmap.ToNumber())
+
+	return CreateFlaggedSegment(sequenceNumber, FlagSelectiveACK, append(first, second...))
 }
 
 func CreateSegments(buffer []byte, seqNumFactory func() uint32) *Queue {

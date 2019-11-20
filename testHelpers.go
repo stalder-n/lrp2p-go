@@ -14,30 +14,30 @@ type ConsolePrinter struct {
 }
 
 func (printer *ConsolePrinter) Open() error {
-	error := printer.extension.Open()
-	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Open()", "error:", fmt.Sprintf("%+v", error))
-	return error
+	err := printer.extension.Open()
+	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Open()", "error:", fmt.Sprintf("%+v", err))
+	return err
 }
 func (printer *ConsolePrinter) Close() error {
-	error := printer.extension.Close()
-	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Close()", "error:", fmt.Sprintf("%+v", error))
-	return error
+	err := printer.extension.Close()
+	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Close()", "error:", fmt.Sprintf("%+v", err))
+	return err
 }
 func (printer *ConsolePrinter) AddExtension(connector Connector) {
 	printer.extension = connector
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "addExtension(...)", "connector:", fmt.Sprintf("%+v", connector))
 }
 func (printer *ConsolePrinter) Read(buffer []byte) (StatusCode, int, error) {
-	status, n, error := printer.extension.Read(buffer)
-	printer.prettyPrint(buffer, "Read(...)", status, n, error)
+	status, n, err := printer.extension.Read(buffer)
+	printer.prettyPrint(buffer, "Read(...)", status, n, err)
 
-	return status, n, error
+	return status, n, err
 }
 func (printer *ConsolePrinter) Write(buffer []byte) (StatusCode, int, error) {
-	statusCode, n, error := printer.extension.Write(buffer)
-	printer.prettyPrint(buffer, "Write(...)", statusCode, n, error)
+	statusCode, n, err := printer.extension.Write(buffer)
+	printer.prettyPrint(buffer, "Write(...)", statusCode, n, err)
 
-	return statusCode, n, error
+	return statusCode, n, err
 }
 func (printer *ConsolePrinter) prettyPrint(buffer []byte, funcName string, status StatusCode, n int, error error) {
 	var str string
@@ -46,7 +46,7 @@ func (printer *ConsolePrinter) prettyPrint(buffer []byte, funcName string, statu
 	} else if IsFlaggedAs(buffer[FlagPosition.Start], FlagSYN) || buffer[FlagPosition.Start] == 0 {
 		str = fmt.Sprintf("%d %s", buffer[:HeaderLength], bytes.Trim(buffer[HeaderLength:], "\x00"))
 	} else if IsFlaggedAs(buffer[FlagPosition.Start], FlagSelectiveACK) {
-		str = fmt.Sprintf("%d %b / %d", buffer[:HeaderLength], bytes.Trim(buffer[HeaderLength:], "\x00"), bytes.Trim(buffer[HeaderLength:], "\x00"))
+		str = fmt.Sprintf("%d %d / %b", buffer[:HeaderLength], buffer[HeaderLength:], buffer[HeaderLength:])
 	} else {
 		str = fmt.Sprintf("CHECK_PRINTER %d %s", buffer[:HeaderLength], bytes.Trim(buffer[HeaderLength:], "\x00"))
 	}

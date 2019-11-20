@@ -5,90 +5,71 @@ import (
 	"testing"
 )
 
-func TestBitmap_AddRemove(t *testing.T) {
-	b := New(3)
+func TestBitmap_AddLinear(t *testing.T) {
+	b := NewBitmap(3)
 
-	b.Add(0)
-	b.Add(2)
+	b.Add(0, nil)
+	b.Add(1, nil)
 
-	assert.Equal(t, uint32(1), b.data[0])
-	assert.Equal(t, uint32(0), b.data[1])
-	assert.Equal(t, uint32(1), b.data[2])
+	assert.Equal(t, uint32(0), b.bitmapData[0])
+	assert.Equal(t, uint32(0), b.bitmapData[1])
+	assert.Equal(t, uint32(0), b.bitmapData[2])
 
-	b.Remove(0)
-	assert.Equal(t, uint32(0), b.data[0])
-
-}
-
-func TestBitmap_Len(t *testing.T) {
-	b := New(3)
-
-	b.Add(0)
-	b.Add(2)
-
-	assert.Equal(t, uint32(2), b.Len())
-
-	b.Remove(0)
-	assert.Equal(t, uint32(1), b.Len())
-
-	b.Remove(2)
-	assert.Equal(t, uint32(0), b.Len())
+	assert.Equal(t, uint32(2), b.SeqNumber)
 
 }
 
-func TestBitmap_Get(t *testing.T) {
-	b := New(3)
-	b.Add(0)
-	b.Add(2)
+func TestBitmap_MoveTwice(t *testing.T) {
+	b := NewBitmap(3)
 
-	assert.Equal(t, uint32(1), b.Get(0))
-	assert.Equal(t, uint32(0), b.Get(1))
-	assert.Equal(t, uint32(1), b.Get(2))
+	b.Add(0, nil)
+	b.Add(1, nil)
+	b.Add(2, nil)
+
+	assert.Equal(t, uint32(0), b.bitmapData[0])
+	assert.Equal(t, uint32(0), b.bitmapData[1])
+	assert.Equal(t, uint32(0), b.bitmapData[2])
+
+	assert.Equal(t, uint32(3), b.SeqNumber)
+
+}
+
+func TestBitmap_AddNonLinear(t *testing.T) {
+	b := NewBitmap(3)
+	b.Add(0, nil)
+	b.Add(2, nil)
+
+	assert.Equal(t, uint32(0), b.bitmapData[0])
+	assert.Equal(t, uint32(1), b.bitmapData[1])
+	assert.Equal(t, uint32(0), b.bitmapData[2])
+
+	assert.Equal(t, uint32(1), b.SeqNumber)
 }
 
 func TestBitmap_ToNumber(t *testing.T) {
-	b := New(3)
-	b.Add(0)
-	b.Remove(1)
-	b.Add(2)
+	b := NewBitmap(3)
+	b.Add(0, nil)
+	b.Add(2, nil)
 
-	assert.Equal(t, uint32(5), b.ToNumber())
+	assert.Equal(t, uint32(2), b.ToNumber())
 
-	b2 := New(3)
-	b2.Add(0)
-	b2.Add(1)
-	b2.Remove(2)
+	b2 := NewBitmap(3)
+	b2.Add(0, nil)
+	b2.Add(1, nil)
 
-	assert.Equal(t, uint32(3), b2.ToNumber())
+	assert.Equal(t, uint32(0), b2.ToNumber())
 }
 
 func TestBitmap_Init(t *testing.T) {
-	b := New(7)
+	b := NewBitmap(7)
 	b.Init(123) //ob1111011
 
-	assert.Equal(t, 7, len(b.data))
-	assert.Equal(t, uint32(1), b.data[0])
-	assert.Equal(t, uint32(1), b.data[1])
-	assert.Equal(t, uint32(0), b.data[2])
-	assert.Equal(t, uint32(1), b.data[3])
-	assert.Equal(t, uint32(1), b.data[4])
-	assert.Equal(t, uint32(1), b.data[5])
-	assert.Equal(t, uint32(1), b.data[6])
-}
-
-func TestBitmap_ToNumberInverted(t *testing.T) {
-	b1 := New(7)
-	b1.Init(123) //ob1111011
-
-	b2 := New(7)
-	b2.Init(4) //ob0000100
-
-	for i := 0; i < 7; i++ {
-		a := b1.data[i]
-		b := b2.data[i]
-		assert.NotEqual(t, a, b)
-	}
-
-	assert.Equal(t, b1.ToNumber(), b2.ToNumberInverted())
-
+	assert.Equal(t, 7, len(b.bitmapData))
+	assert.Equal(t, uint32(1), b.bitmapData[0])
+	assert.Equal(t, uint32(1), b.bitmapData[1])
+	assert.Equal(t, uint32(0), b.bitmapData[2])
+	assert.Equal(t, uint32(1), b.bitmapData[3])
+	assert.Equal(t, uint32(1), b.bitmapData[4])
+	assert.Equal(t, uint32(1), b.bitmapData[5])
+	assert.Equal(t, uint32(1), b.bitmapData[6])
 }
