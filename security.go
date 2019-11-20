@@ -1,4 +1,4 @@
-package protocol
+package go_protocol
 
 import (
 	"crypto/rand"
@@ -85,7 +85,6 @@ func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
 	}
 	sec.usedNonces[nonce] = 1
 	return success
-
 }
 
 func (sec *securityExtension) initiateHandshake() {
@@ -124,7 +123,7 @@ func (sec *securityExtension) determineHandshakeStrategy() {
 }
 
 func createHandshakeState(keyRef *noise.DHKey, peerKey []byte, handshakePattern noise.HandshakePattern, isInitiator bool) *noise.HandshakeState {
-	suite := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
+	suite := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2b)
 	var key noise.DHKey
 	if keyRef == nil {
 		key, _ = suite.GenerateKeypair(rand.Reader)

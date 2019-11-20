@@ -1,4 +1,4 @@
-package protocol
+package go_protocol
 
 import "testing"
 

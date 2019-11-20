@@ -1,4 +1,4 @@
-package protocol
+package go_protocol
 
 import (
 	"encoding/binary"
@@ -20,8 +20,11 @@ const flagSyn byte = 2
 const flagEnd byte = 4
 
 const defaultSegmentMtu = 64
+
 var segmentMtu = defaultSegmentMtu
+
 const headerLength = 6
+
 var dataChunkSize = segmentMtu - headerLength
 
 type segment struct {
@@ -52,7 +55,7 @@ func (seg *segment) getSequenceNumber() uint32 {
 }
 
 func (seg *segment) getExpectedSequenceNumber() uint32 {
-	seqNumLength := sequenceNumberPosition.End-sequenceNumberPosition.Start;
+	seqNumLength := sequenceNumberPosition.End - sequenceNumberPosition.Start;
 	return bytesToUint32(seg.data[0:seqNumLength])
 }
 
