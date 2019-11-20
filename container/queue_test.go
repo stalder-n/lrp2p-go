@@ -2,7 +2,6 @@ package goprotocol
 
 import (
 	"github.com/stretchr/testify/assert"
-	. "go-protocol/container"
 	"testing"
 )
 
