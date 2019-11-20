@@ -1,4 +1,4 @@
-package container
+package goprotocol
 
 import (
 	"container/list"

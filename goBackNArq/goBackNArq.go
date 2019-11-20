@@ -1,4 +1,4 @@
-package goBackNArq
+package goprotocol
 
 import (
 	. "go-protocol/container"

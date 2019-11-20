@@ -1,4 +1,4 @@
-package selectiveArq
+package goprotocol
 
 import (
 	. "go-protocol/container"

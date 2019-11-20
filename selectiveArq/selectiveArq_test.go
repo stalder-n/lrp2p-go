@@ -1,4 +1,4 @@
-package selectiveArq
+package goprotocol
 
 import (
 	"github.com/stretchr/testify/suite"

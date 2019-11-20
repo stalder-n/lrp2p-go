@@ -1,4 +1,4 @@
-package container
+package goprotocol
 
 type Bitmap struct {
 	bitmapData []uint32
