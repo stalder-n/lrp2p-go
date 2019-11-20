@@ -6,8 +6,8 @@ import (
 )
 
 func main() {
-	connection1 := Connect("localhost", 3030, 3031)
-	connection2 := Connect("localhost", 3031, 3030)
+	connection1 := NewSocket("localhost", 3030, 3031)
+	connection2 := NewSocket("localhost", 3031, 3030)
 	defer connection1.Close()
 	defer connection2.Close()
 	connection1.Open()

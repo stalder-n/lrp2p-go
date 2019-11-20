@@ -9,6 +9,18 @@ type Socket struct {
 	connection    Connector
 	readQueue     concurrencyQueue
 	dataAvailable *sync.Cond
+	isReading     bool
+}
+
+func NewSocket(address string, senderPort, receiverPort int) *Socket {
+	var connector Connector = &udpConnector{
+		senderAddress: address,
+		senderPort:    senderPort,
+		receiverPort:  receiverPort,
+	}
+	socket := &Socket{connection: connect(connector)}
+	socket.dataAvailable = sync.NewCond(&sync.Mutex{})
+	return socket
 }
 
 type payload struct {
@@ -19,11 +31,10 @@ type payload struct {
 
 func (socket *Socket) Open() error {
 	err := socket.connection.Open()
-	socket.dataAvailable = sync.NewCond(&sync.Mutex{})
 	if err != nil {
 		return err
 	}
-	go socket.read()
+
 	return err
 }
 
@@ -56,6 +67,10 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 }
 
 func (socket *Socket) Read(buffer []byte) (int, error) {
+	if !socket.isReading {
+		go socket.read()
+		socket.isReading = true
+	}
 	socket.dataAvailable.L.Lock()
 	for socket.readQueue.IsEmpty() {
 		socket.dataAvailable.Wait()
@@ -76,16 +91,7 @@ func (socket *Socket) read() {
 			socket.readQueue.Enqueue(p)
 			socket.dataAvailable.Signal()
 		case ackReceived:
+		case invalidNonce:
 		}
 	}
-}
-
-func Connect(address string, senderPort, receiverPort int) *Socket {
-	var connector Connector = &udpConnector{
-		senderAddress: address,
-		senderPort:    senderPort,
-		receiverPort:  receiverPort,
-	}
-
-	return &Socket{connection: connect(connector)}
 }
