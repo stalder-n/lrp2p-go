@@ -13,11 +13,15 @@ type Socket struct {
 }
 
 func NewSocket(address string, senderPort, receiverPort int) *Socket {
-	var connector Connector = &udpConnector{
+	connector := &udpConnector{
 		senderAddress: address,
 		senderPort:    senderPort,
 		receiverPort:  receiverPort,
 	}
+	return newSocket(connector, address, senderPort, receiverPort)
+}
+
+func newSocket(connector Connector, address string, senderPort, receiverPort int) *Socket {
 	socket := &Socket{connection: connect(connector)}
 	socket.dataAvailable = sync.NewCond(&sync.Mutex{})
 	return socket
