@@ -99,6 +99,7 @@ func (sec *securityExtension) acceptHandshake() {
 	sec.strategy.accept()
 }
 
+// TODO: Pass payload for KK patterns
 func (sec *securityExtension) writeHandshakeMessage() (*noise.CipherState, *noise.CipherState) {
 	msg, cs0, cs1, err := sec.handshake.WriteMessage(nil, nil)
 	reportError(err)
@@ -177,6 +178,7 @@ type handshakeKKStrategy struct {
 	sec *securityExtension
 }
 
+// TODO: Timeout for handshake messages
 func (h *handshakeKKStrategy) initiate() {
 	h.sec.writeHandshakeMessage()
 	h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage()
