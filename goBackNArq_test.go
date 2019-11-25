@@ -2,7 +2,6 @@ package goprotocol
 
 import (
 	"github.com/stretchr/testify/suite"
-	. "go-protocol"
 	. "go-protocol/container"
 	. "go-protocol/lowlevel"
 	"testing"
