@@ -1,4 +1,4 @@
-package go_protocol
+package goprotocol
 
 import (
 	"encoding/binary"

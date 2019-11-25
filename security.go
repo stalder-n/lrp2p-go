@@ -1,4 +1,4 @@
-package go_protocol
+package goprotocol
 
 import (
 	"crypto/rand"
@@ -105,7 +105,6 @@ func (sec *securityExtension) acceptHandshake() []byte {
 	return sec.strategy.accept()
 }
 
-// TODO: Pass payload for KK patterns
 func (sec *securityExtension) writeHandshakeMessage(payload []byte) (*noise.CipherState, *noise.CipherState) {
 	msg, cs0, cs1, err := sec.handshake.WriteMessage(nil, payload)
 	reportError(err)
@@ -186,7 +185,6 @@ type handshakeKKStrategy struct {
 	sec *securityExtension
 }
 
-// TODO: Timeout for handshake messages
 func (h *handshakeKKStrategy) initiate(payload []byte) bool {
 	h.sec.writeHandshakeMessage(payload)
 	_, h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage()
