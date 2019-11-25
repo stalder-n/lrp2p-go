@@ -1,14 +1,17 @@
 package goprotocol
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestQueue_EmptyQueue(t *testing.T) {
-	q := queue{}
+	q := NewQueue()
 	if q.Dequeue() != nil {
-		t.Errorf("Empty queue value not == nil")
+		t.Errorf("Empty container value not == nil")
 	}
 	if !q.IsEmpty() {
-		t.Errorf("IsEmpty() for empty queue != true")
+		t.Errorf("IsEmpty() for empty container != true")
 	}
 }
 
@@ -17,13 +20,13 @@ func printTestError(t *testing.T, name string, expected, actual int) {
 }
 
 func TestQueue_WithMultipleEntries(t *testing.T) {
-	q := queue{}
+	q := NewQueue()
 	q.Enqueue(3)
 	q.Enqueue(5)
 	q.Enqueue(2)
 
 	if q.IsEmpty() {
-		t.Errorf("Queue with 3 elements shows as empty")
+		t.Errorf("container with 3 elements shows as empty")
 	}
 
 	actual := q.Dequeue().(int)
@@ -41,12 +44,12 @@ func TestQueue_WithMultipleEntries(t *testing.T) {
 }
 
 func TestQueue_PushFront(t *testing.T) {
-	q := queue{}
+	q := NewQueue()
 	q.Enqueue(3)
 	q.PushFront(5)
 
 	if q.IsEmpty() {
-		t.Errorf("Queue with 3 elements shows as empty")
+		t.Errorf("container with 3 elements shows as empty")
 	}
 
 	actual := q.Dequeue().(int)
@@ -60,11 +63,11 @@ func TestQueue_PushFront(t *testing.T) {
 }
 
 func TestQueue_PeekRemovesNothing(t *testing.T) {
-	q := queue{}
+	q := NewQueue()
 	q.Enqueue(3)
 
 	if q.IsEmpty() {
-		t.Errorf("Queue with 3 elements shows as empty")
+		t.Errorf("container with 3 elements shows as empty")
 	}
 
 	actual := q.Peek().(int)
@@ -75,4 +78,52 @@ func TestQueue_PeekRemovesNothing(t *testing.T) {
 	if actual != 3 {
 		printTestError(t, "Dequeue", 3, actual)
 	}
+}
+
+func TestQueue_CheckType(t *testing.T) {
+	q1 := NewQueue()
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+
+	test := func() { q1.Enqueue(1) }
+
+	assert.Panics(t, test, "")
+
+}
+
+func TestQueue_IsEmpty(t *testing.T) {
+	q1 := NewQueue()
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+
+	assert.Equal(t, false, q1.IsEmpty())
+	q1.Dequeue()
+	assert.Equal(t, true, q1.IsEmpty())
+}
+
+func TestQueue_IsEmpty2(t *testing.T) {
+	q1 := NewQueue()
+	q1.Enqueue(&Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+
+	assert.Equal(t, false, q1.IsEmpty())
+	q1.Dequeue()
+	assert.Equal(t, true, q1.IsEmpty())
+}
+
+func TestQueue_IsEmpty3(t *testing.T) {
+	q1 := NewQueue()
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+	q1.Enqueue(Segment{SequenceNumber: []byte{0, 0, 0, 1}})
+
+	i := 0
+	for !q1.IsEmpty() {
+		ele := q1.Dequeue().(Segment)
+		assert.Equal(t, uint32(1), ele.GetSequenceNumber())
+		i++
+	}
+
+	assert.Equal(t, 7, i)
 }

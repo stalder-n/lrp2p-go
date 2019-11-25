@@ -42,15 +42,15 @@ func (sec *securityExtension) Close() error {
 	return sec.connector.Close()
 }
 
-func (sec *securityExtension) Write(buffer []byte) (statusCode, int, error) {
+func (sec *securityExtension) Write(buffer []byte) (StatusCode, int, error) {
 	if sec.handshake == nil {
 		payloadWritten := sec.initiateHandshake(buffer)
 		if payloadWritten {
-			return success, len(buffer), nil
+			return Success, len(buffer), nil
 		}
 	}
 	if sec.encrypter == nil {
-		return waitingForHandshake, 0, nil
+		return WaitingForHandshake, 0, nil
 	}
 	encrypted := sec.encrypter.Cipher().Encrypt(nil, sec.writeNonce, nil, buffer)
 	buf := make([]byte, 8+len(encrypted))
@@ -60,22 +60,22 @@ func (sec *securityExtension) Write(buffer []byte) (statusCode, int, error) {
 	return sec.connector.Write(buf)
 }
 
-func (sec *securityExtension) Read(buffer []byte) (statusCode, int, error) {
+func (sec *securityExtension) Read(buffer []byte) (StatusCode, int, error) {
 	if sec.handshake == nil {
 		payload := sec.acceptHandshake()
 		if payload != nil {
 			copy(buffer, payload)
-			return success, len(payload), nil
+			return Success, len(payload), nil
 		}
 	}
 	if sec.decrypter == nil {
-		return waitingForHandshake, 0, nil
+		return WaitingForHandshake, 0, nil
 	}
 	encrypted := make([]byte, len(buffer))
 	statusCode, n, err := sec.connector.Read(encrypted)
 	nonce := binary.BigEndian.Uint64(encrypted[:8])
 	nonceStatus := sec.syncNonces(nonce)
-	if nonceStatus != success {
+	if nonceStatus != Success {
 		return nonceStatus, 0, nil
 	}
 	decryptedMsg, err := sec.decrypter.Cipher().Decrypt(nil, nonce, nil, encrypted[8:n])
@@ -85,12 +85,12 @@ func (sec *securityExtension) Read(buffer []byte) (statusCode, int, error) {
 
 // Checks if the received nonce has been used before and returns an appropriate
 // status code
-func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
+func (sec *securityExtension) syncNonces(nonce uint64) StatusCode {
 	if _, ok := sec.usedNonces[nonce]; ok {
-		return invalidNonce
+		return InvalidNonce
 	}
 	sec.usedNonces[nonce] = 1
-	return success
+	return Success
 }
 
 func (sec *securityExtension) initiateHandshake(payload []byte) bool {
@@ -113,7 +113,7 @@ func (sec *securityExtension) writeHandshakeMessage(payload []byte) (*noise.Ciph
 }
 
 func (sec *securityExtension) readHandshakeMessage() ([]byte, *noise.CipherState, *noise.CipherState) {
-	readBuffer := make([]byte, segmentMtu)
+	readBuffer := make([]byte, SegmentMtu)
 	_, n, _ := sec.connector.Read(readBuffer)
 	payload, cs0, cs1, err := sec.handshake.ReadMessage(nil, readBuffer[:n])
 	reportError(err)
