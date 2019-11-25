@@ -44,12 +44,14 @@ func (sec *securityExtension) Close() error {
 
 func (sec *securityExtension) Write(buffer []byte) (statusCode, int, error) {
 	if sec.handshake == nil {
-		sec.initiateHandshake()
+		payloadWritten := sec.initiateHandshake(buffer)
+		if payloadWritten {
+			return success, len(buffer), nil
+		}
 	}
 	if sec.encrypter == nil {
 		return waitingForHandshake, 0, nil
 	}
-
 	encrypted := sec.encrypter.Cipher().Encrypt(nil, sec.writeNonce, nil, buffer)
 	buf := make([]byte, 8+len(encrypted))
 	copy(buf[8:], encrypted)
@@ -60,7 +62,11 @@ func (sec *securityExtension) Write(buffer []byte) (statusCode, int, error) {
 
 func (sec *securityExtension) Read(buffer []byte) (statusCode, int, error) {
 	if sec.handshake == nil {
-		sec.acceptHandshake()
+		payload := sec.acceptHandshake()
+		if payload != nil {
+			copy(buffer, payload)
+			return success, len(payload), nil
+		}
 	}
 	if sec.decrypter == nil {
 		return waitingForHandshake, 0, nil
@@ -87,32 +93,32 @@ func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
 	return success
 }
 
-func (sec *securityExtension) initiateHandshake() {
+func (sec *securityExtension) initiateHandshake(payload []byte) bool {
 	sec.determineHandshakeStrategy()
 	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), true)
-	sec.strategy.initiate()
+	return sec.strategy.initiate(payload)
 }
 
-func (sec *securityExtension) acceptHandshake() {
+func (sec *securityExtension) acceptHandshake() []byte {
 	sec.determineHandshakeStrategy()
 	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), false)
-	sec.strategy.accept()
+	return sec.strategy.accept()
 }
 
 // TODO: Pass payload for KK patterns
-func (sec *securityExtension) writeHandshakeMessage() (*noise.CipherState, *noise.CipherState) {
-	msg, cs0, cs1, err := sec.handshake.WriteMessage(nil, nil)
+func (sec *securityExtension) writeHandshakeMessage(payload []byte) (*noise.CipherState, *noise.CipherState) {
+	msg, cs0, cs1, err := sec.handshake.WriteMessage(nil, payload)
 	reportError(err)
 	_, _, _ = sec.connector.Write(msg)
 	return cs0, cs1
 }
 
-func (sec *securityExtension) readHandshakeMessage() (*noise.CipherState, *noise.CipherState) {
-	readBuffer := make([]byte, 128)
+func (sec *securityExtension) readHandshakeMessage() ([]byte, *noise.CipherState, *noise.CipherState) {
+	readBuffer := make([]byte, segmentMtu)
 	_, n, _ := sec.connector.Read(readBuffer)
-	_, cs0, cs1, err := sec.handshake.ReadMessage(nil, readBuffer[:n])
+	payload, cs0, cs1, err := sec.handshake.ReadMessage(nil, readBuffer[:n])
 	reportError(err)
-	return cs0, cs1
+	return payload, cs0, cs1
 }
 
 func (sec *securityExtension) determineHandshakeStrategy() {
@@ -149,8 +155,8 @@ func reportError(err error) {
 }
 
 type handshakeStrategy interface {
-	initiate()
-	accept()
+	initiate(payload []byte) bool
+	accept() []byte
 	getPattern() noise.HandshakePattern
 }
 
@@ -158,16 +164,18 @@ type handshakeXXStrategy struct {
 	sec *securityExtension
 }
 
-func (h *handshakeXXStrategy) initiate() {
-	h.sec.writeHandshakeMessage()
+func (h *handshakeXXStrategy) initiate(payload []byte) bool {
+	h.sec.writeHandshakeMessage(nil)
 	h.sec.readHandshakeMessage()
-	h.sec.encrypter, h.sec.decrypter = h.sec.writeHandshakeMessage()
+	h.sec.encrypter, h.sec.decrypter = h.sec.writeHandshakeMessage(nil)
+	return false
 }
 
-func (h *handshakeXXStrategy) accept() {
+func (h *handshakeXXStrategy) accept() []byte {
 	h.sec.readHandshakeMessage()
-	h.sec.writeHandshakeMessage()
-	h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage()
+	h.sec.writeHandshakeMessage(nil)
+	_, h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage()
+	return nil
 }
 
 func (h *handshakeXXStrategy) getPattern() noise.HandshakePattern {
@@ -179,14 +187,16 @@ type handshakeKKStrategy struct {
 }
 
 // TODO: Timeout for handshake messages
-func (h *handshakeKKStrategy) initiate() {
-	h.sec.writeHandshakeMessage()
-	h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage()
+func (h *handshakeKKStrategy) initiate(payload []byte) bool {
+	h.sec.writeHandshakeMessage(payload)
+	_, h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage()
+	return true
 }
 
-func (h *handshakeKKStrategy) accept() {
-	h.sec.readHandshakeMessage()
-	h.sec.decrypter, h.sec.encrypter = h.sec.writeHandshakeMessage()
+func (h *handshakeKKStrategy) accept() []byte {
+	payload, _, _ := h.sec.readHandshakeMessage()
+	h.sec.decrypter, h.sec.encrypter = h.sec.writeHandshakeMessage(nil)
+	return payload
 }
 
 func (h *handshakeKKStrategy) getPattern() noise.HandshakePattern {

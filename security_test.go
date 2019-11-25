@@ -13,6 +13,10 @@ type SecurityTestSuite struct {
 	alphaConnection, betaConnection *securityExtension
 }
 
+func (suite *SecurityTestSuite) SetupTest() {
+	setSegmentMtu(128)
+}
+
 func (suite *SecurityTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaConnection.Close())
 	suite.handleTestError(suite.betaConnection.Close())
