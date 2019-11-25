@@ -17,6 +17,15 @@ type goBackNArq struct {
 	writeMutex            sync.Mutex
 }
 
+func newGoBackNArq(extension Connector) *goBackNArq {
+	arq := &goBackNArq{
+		extension:    extension,
+		segmentQueue: queue{},
+		windowSize:   10,
+	}
+	return arq
+}
+
 func (arq *goBackNArq) Open() error {
 	arq.segmentQueue = queue{}
 	if arq.windowSize == 0 {

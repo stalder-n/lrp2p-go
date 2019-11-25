@@ -97,9 +97,8 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 }
 
 func connect(connector Connector) Connector {
-	arq := &goBackNArq{}
 	sec := newSecurityExtension(connector, nil, nil)
-	arq.addExtension(sec)
+	arq := newGoBackNArq(sec)
 	return arq
 }
 
