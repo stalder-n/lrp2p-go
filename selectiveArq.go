@@ -1,8 +1,6 @@
 package goprotocol
 
 import (
-	. "go-protocol/container"
-	. "go-protocol/lowlevel"
 	"time"
 )
 

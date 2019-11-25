@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	. "go-protocol/lowlevel"
 	"reflect"
 )
 

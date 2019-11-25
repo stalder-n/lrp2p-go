@@ -2,7 +2,6 @@ package goprotocol
 
 import (
 	"encoding/binary"
-	. "go-protocol/container"
 	"time"
 )
 
