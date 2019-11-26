@@ -139,6 +139,10 @@ func (arq *selectiveArq) Read(buffer []byte) (StatusCode, int, error) {
 	}
 }
 
+func (arq *selectiveArq) SetDeadline(t time.Time) {
+	arq.extension.SetDeadline(t)
+}
+
 func clear(b []byte) {
 	for k := range b {
 		b[k] = 0

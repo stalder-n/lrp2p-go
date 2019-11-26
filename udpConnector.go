@@ -3,6 +3,7 @@ package goprotocol
 import (
 	"net"
 	"strconv"
+	"time"
 )
 
 type udpConnector struct {
@@ -49,4 +50,9 @@ func (connector *udpConnector) Write(buffer []byte) (StatusCode, int, error) {
 func (connector *udpConnector) Read(buffer []byte) (StatusCode, int, error) {
 	n, err := connector.udpReceiver.Read(buffer)
 	return Success, n, err
+}
+
+func (connector *udpConnector) SetDeadline(t time.Time) {
+	err := connector.udpReceiver.SetReadDeadline(t)
+	reportError(err)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"github.com/flynn/noise"
 	"log"
+	"time"
 )
 
 type securityExtension struct {
@@ -81,6 +82,10 @@ func (sec *securityExtension) Read(buffer []byte) (StatusCode, int, error) {
 	decryptedMsg, err := sec.decrypter.Cipher().Decrypt(nil, nonce, nil, encrypted[8:n])
 	copy(buffer, decryptedMsg)
 	return statusCode, len(decryptedMsg), err
+}
+
+func (sec *securityExtension) SetDeadline(t time.Time) {
+	sec.connector.SetDeadline(t)
 }
 
 // Checks if the received nonce has been used before and returns an appropriate

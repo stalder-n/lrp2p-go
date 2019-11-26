@@ -31,6 +31,7 @@ type Connector interface {
 	Write([]byte) (StatusCode, int, error)
 	Open() error
 	Close() error
+	SetDeadline(time.Time)
 }
 
 func connect(connector Connector) Connector {

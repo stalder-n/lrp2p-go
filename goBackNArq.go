@@ -168,6 +168,10 @@ func (arq *goBackNArq) writeMissingSegment() {
 	arq.writeQueuedSegments()
 }
 
+func (arq *goBackNArq) SetDeadline(t time.Time) {
+	arq.extension.SetDeadline(t)
+}
+
 func areElementsGreaterSequenceNumber(sequenceNumber uint32) func(seg interface{}) bool {
 	return func(seg interface{}) bool {
 		if seg.(*Segment).GetSequenceNumber() > sequenceNumber {

@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 type ConsolePrinter struct {
@@ -52,6 +53,10 @@ func (printer *ConsolePrinter) prettyPrint(buffer []byte, funcName string, statu
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), funcName, "buffer:", str, "status:", status, "n:", n, "error:", fmt.Sprintf("%+v", error))
 }
 
+func (printer *ConsolePrinter) SetDeadline(t time.Time) {
+	printer.extension.SetDeadline(t)
+}
+
 type SegmentManipulator struct {
 	savedSegments map[uint32][]byte
 	toDropOnce    list.List
@@ -84,6 +89,10 @@ func (manipulator *SegmentManipulator) Write(buffer []byte) (StatusCode, int, er
 	return manipulator.extension.Write(buffer)
 }
 
+func (manipulator *SegmentManipulator) SetDeadline(t time.Time) {
+	manipulator.extension.SetDeadline(t)
+}
+
 type ChannelConnector struct {
 	In  chan []byte
 	Out chan []byte
@@ -92,16 +101,23 @@ type ChannelConnector struct {
 func (connector *ChannelConnector) Open() error {
 	return nil
 }
+
 func (connector *ChannelConnector) Close() error {
 	close(connector.In)
 	return nil
 }
+
 func (connector *ChannelConnector) Write(buffer []byte) (StatusCode, int, error) {
 	connector.Out <- buffer
 	return Success, len(buffer), nil
 }
+
 func (connector *ChannelConnector) Read(buffer []byte) (StatusCode, int, error) {
 	buff := <-connector.In
 	copy(buffer, buff)
 	return Success, len(buff), nil
+}
+
+func (connector *ChannelConnector) SetDeadline(time.Time) {
+	panic("Deadlines not implemented for channels")
 }
