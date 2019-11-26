@@ -139,8 +139,8 @@ func (arq *selectiveArq) Read(buffer []byte) (StatusCode, int, error) {
 	}
 }
 
-func (arq *selectiveArq) SetDeadline(t time.Time) {
-	arq.extension.SetDeadline(t)
+func (arq *selectiveArq) SetReadTimeout(t time.Duration) {
+	arq.extension.SetReadTimeout(t)
 }
 
 func clear(b []byte) {

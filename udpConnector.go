@@ -12,6 +12,7 @@ type udpConnector struct {
 	receiverPort  int
 	udpSender     *net.UDPConn
 	udpReceiver   *net.UDPConn
+	timeout       time.Duration
 }
 
 func createUdpAddress(addressString string, port int) *net.UDPAddr {
@@ -52,7 +53,6 @@ func (connector *udpConnector) Read(buffer []byte) (StatusCode, int, error) {
 	return Success, n, err
 }
 
-func (connector *udpConnector) SetDeadline(t time.Time) {
-	err := connector.udpReceiver.SetReadDeadline(t)
-	reportError(err)
+func (connector *udpConnector) SetReadTimeout(t time.Duration) {
+	connector.timeout = t
 }

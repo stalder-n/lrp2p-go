@@ -53,8 +53,8 @@ func (printer *ConsolePrinter) prettyPrint(buffer []byte, funcName string, statu
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), funcName, "buffer:", str, "status:", status, "n:", n, "error:", fmt.Sprintf("%+v", error))
 }
 
-func (printer *ConsolePrinter) SetDeadline(t time.Time) {
-	printer.extension.SetDeadline(t)
+func (printer *ConsolePrinter) SetReadTimeout(t time.Duration) {
+	printer.extension.SetReadTimeout(t)
 }
 
 type SegmentManipulator struct {
@@ -89,13 +89,14 @@ func (manipulator *SegmentManipulator) Write(buffer []byte) (StatusCode, int, er
 	return manipulator.extension.Write(buffer)
 }
 
-func (manipulator *SegmentManipulator) SetDeadline(t time.Time) {
-	manipulator.extension.SetDeadline(t)
+func (manipulator *SegmentManipulator) SetReadTimeout(t time.Duration) {
+	manipulator.extension.SetReadTimeout(t)
 }
 
 type ChannelConnector struct {
-	In  chan []byte
-	Out chan []byte
+	In      chan []byte
+	Out     chan []byte
+	timeout time.Duration
 }
 
 func (connector *ChannelConnector) Open() error {
@@ -113,11 +114,33 @@ func (connector *ChannelConnector) Write(buffer []byte) (StatusCode, int, error)
 }
 
 func (connector *ChannelConnector) Read(buffer []byte) (StatusCode, int, error) {
-	buff := <-connector.In
-	copy(buffer, buff)
-	return Success, len(buff), nil
+	var buff []byte
+	if connector.timeout == 0 {
+		buff = <-connector.In
+		copy(buffer, buff)
+		return Success, len(buff), nil
+	}
+	for {
+		select {
+		case buff = <-connector.In:
+			if buff == nil {
+				continue
+			}
+			copy(buffer, buff)
+			return Success, len(buff), nil
+		case <-after(time.Now().Add(2*time.Second), connector.timeout):
+			return Timeout, 0, nil
+		}
+
+	}
 }
 
-func (connector *ChannelConnector) SetDeadline(time.Time) {
-	panic("Deadlines not implemented for channels")
+func (connector *ChannelConnector) SetReadTimeout(t time.Duration) {
+	connector.timeout = t
+	connector.In <- nil
+}
+
+func after(artificialNow time.Time, timeout time.Duration) <-chan time.Time {
+	artificialTimeout := artificialNow.Sub(time.Now().Add(timeout))
+	return time.After(artificialTimeout)
 }

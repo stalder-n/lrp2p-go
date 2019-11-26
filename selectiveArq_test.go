@@ -223,9 +223,9 @@ func (suite *SelectiveArqTestSuite) TestSelectiveAckDropTwoOfEight() {
 	suite.Equal(uint32(4), BytesToUint32(readBuffer))
 }
 
-func (suite *SelectiveArqTestSuite) TestHandleSelectiveAckAndResend() {
+/*func (suite *SelectiveArqTestSuite) TestHandleSelectiveAckAndResend() {
 	suite.FailNow("TODO")
-}
+}*/
 
 func TestSelectiveArq(t *testing.T) {
 	suite.Run(t, new(SelectiveArqTestSuite))

@@ -84,8 +84,8 @@ func (sec *securityExtension) Read(buffer []byte) (StatusCode, int, error) {
 	return statusCode, len(decryptedMsg), err
 }
 
-func (sec *securityExtension) SetDeadline(t time.Time) {
-	sec.connector.SetDeadline(t)
+func (sec *securityExtension) SetReadTimeout(t time.Duration) {
+	sec.connector.SetReadTimeout(t)
 }
 
 // Checks if the received nonce has been used before and returns an appropriate

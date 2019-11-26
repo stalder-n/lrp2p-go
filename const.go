@@ -23,6 +23,7 @@ const (
 	WindowFull
 	WaitingForHandshake
 	InvalidNonce
+	Timeout
 )
 
 type Position struct {
