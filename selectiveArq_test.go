@@ -28,7 +28,6 @@ type SelectiveArqTestSuite struct {
 	suite.Suite
 	alphaArq, betaArq                 *selectiveArq
 	alphaManipulator, betaManipulator *SegmentManipulator
-	sequenceNumberQueue               *Queue
 }
 
 func (suite *SelectiveArqTestSuite) handleTestError(err error) {
@@ -47,10 +46,6 @@ func (suite *SelectiveArqTestSuite) SetupTest() {
 	}
 	suite.alphaArq, suite.alphaManipulator = newMockSelectiveArqConnection(connector1, "alpha")
 	suite.betaArq, suite.betaManipulator = newMockSelectiveArqConnection(connector2, "beta")
-
-	suite.sequenceNumberQueue = NewQueue()
-	suite.sequenceNumberQueue.Enqueue(uint32(1))
-	suite.sequenceNumberQueue.Enqueue(uint32(2))
 
 	suite.handleTestError(suite.alphaArq.Open())
 	suite.handleTestError(suite.betaArq.Open())
@@ -89,7 +84,7 @@ func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 2}})
 	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 3}})
 	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(20000), SequenceNumber: []byte{0, 0, 0, 4}})
-	arq.queueTimedOutSegmentsForWrite()
+	arq.queueTimedOutSegmentsForWrite(currentTime)
 
 	i := uint32(1)
 	for !arq.readyToSendSegmentQueue.IsEmpty() {
@@ -221,6 +216,34 @@ func (suite *SelectiveArqTestSuite) TestSelectiveAckDropTwoOfEight() {
 
 	suite.readAck(suite.alphaArq, readBuffer)
 	suite.Equal(uint32(4), BytesToUint32(readBuffer))
+}
+
+func (suite *SelectiveArqTestSuite) TestRetransmission() {
+	SegmentMtu = HeaderLength + 8 //ack need 2 * uint32 space
+	suite.alphaArq.windowSize = 8
+	suite.betaArq.windowSize = 8
+	RetransmissionTimeout = 40 * time.Millisecond
+	suite.alphaArq.Open()
+	suite.betaArq.Open()
+
+	suite.alphaManipulator.DropOnce(2)
+	suite.alphaManipulator.DropOnce(3)
+
+	message := "ABCD1234EFGH5678IJKL9012MNOP3456"
+	writeBuffer := []byte(message)
+	readBuffer := make([]byte, SegmentMtu)
+
+	now := time.Now()
+	time := func() time.Time {
+		now = now.Add(10 * time.Millisecond)
+		return now
+	}
+
+	suite.alphaArq.Write(writeBuffer, time())
+	suite.betaArq.Read(readBuffer, time())
+	suite.betaArq.Read(readBuffer, time())
+	suite.alphaArq.Read(readBuffer, time())
+	suite.alphaArq.Read(readBuffer, time())
 }
 
 func TestSelectiveArq(t *testing.T) {

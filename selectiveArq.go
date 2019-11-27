@@ -55,10 +55,10 @@ func (arq *selectiveArq) addExtension(extension Connector) {
 	arq.extension = extension
 }
 
-func (arq *selectiveArq) queueTimedOutSegmentsForWrite() {
+func (arq *selectiveArq) queueTimedOutSegmentsForWrite(time time.Time) {
 	for i := 0; i < len(arq.NotAckedSegment); i++ {
 		seg := arq.NotAckedSegment[i]
-		if HasSegmentTimedOut(seg) {
+		if HasSegmentTimedOut(seg, time) {
 			arq.readyToSendSegmentQueue.PushFront(seg)
 			arq.NotAckedSegment[i] = nil
 		} else {
@@ -94,7 +94,7 @@ func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (StatusCode, 
 		arq.window++
 	}
 
-	arq.queueTimedOutSegmentsForWrite()
+	arq.queueTimedOutSegmentsForWrite(timestamp)
 
 	status, _, err := arq.writeQueuedSegments(timestamp)
 
@@ -149,16 +149,24 @@ func clear(b []byte) {
 
 func (arq *selectiveArq) handleSelectiveAck(seg *Segment, timestamp time.Time) {
 	arq.removeAckedSegment(seg.Data)
-	arq.queueTimedOutSegmentsForWrite()
+	arq.queueTimedOutSegmentsForWrite(timestamp)
 	arq.writeQueuedSegments(timestamp)
 }
 
 func (arq *selectiveArq) removeAckedSegment(data []byte) {
-	ackedSequenceNumberBitmap := NewBitmap(arq.windowSize).Init(BytesToUint32(data))
-	for i := uint32(0); i < arq.windowSize; i++ {
-		ele, _ := ackedSequenceNumberBitmap.Get(i)
+	ackedSequenceNumberBitmap := NewBitmap(arq.windowSize).Init(BytesToUint32(data[0:4]), BytesToUint32(data[4:]))
+
+	//due to slide of receiver we have to adjust our array
+	for index, ele := range arq.NotAckedSegment {
+		if ele != nil && ele.GetSequenceNumber() < ackedSequenceNumberBitmap.SeqNumber {
+			arq.NotAckedSegment[index] = nil
+		}
+	}
+
+	//remove out of order acked segment
+	for i, ele := range ackedSequenceNumberBitmap.bitmapData {
 		if ele == 1 {
-			index := (ackedSequenceNumberBitmap.SeqNumber + i) % arq.windowSize
+			index := (ackedSequenceNumberBitmap.SeqNumber + uint32(i)) % arq.windowSize
 			arq.NotAckedSegment[index] = nil
 			arq.window--
 		}

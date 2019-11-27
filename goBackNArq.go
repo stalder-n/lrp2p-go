@@ -64,14 +64,14 @@ func (arq *goBackNArq) parseAndQueueSegmentsForWrite(buffer []byte) {
 	arq.readyToSendSegmentQueue.EnqueueList(segs)
 }
 
-func (arq *goBackNArq) queueTimedOutSegmentsForWrite() {
+func (arq *goBackNArq) queueTimedOutSegmentsForWrite(time time.Time) {
 	if arq.notAckedSegmentQueue.IsEmpty() {
 		return
 	}
 
 	oldestSegment, ok := arq.notAckedSegmentQueue.Peek().(Segment)
 
-	if ok && HasSegmentTimedOut(&oldestSegment) {
+	if ok && HasSegmentTimedOut(&oldestSegment, time) {
 		arq.window -= uint32(arq.notAckedSegmentQueue.Len())
 
 		for arq.notAckedSegmentQueue.Len() != 0 {
@@ -105,7 +105,7 @@ func (arq *goBackNArq) writeQueuedSegments(timestamp time.Time) (StatusCode, int
 func (arq *goBackNArq) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
 	//TODO consolidate window size handling
 	arq.parseAndQueueSegmentsForWrite(buffer)
-	arq.queueTimedOutSegmentsForWrite()
+	arq.queueTimedOutSegmentsForWrite(timestamp)
 	return arq.writeQueuedSegments(timestamp)
 }
 

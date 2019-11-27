@@ -17,13 +17,13 @@ var SequenceNumberFactory = func() uint32 {
 	return sequenceNum
 }
 
-func HasSegmentTimedOut(seg *Segment) bool {
+func HasSegmentTimedOut(seg *Segment, time time.Time) bool {
 	if seg == nil {
 		return false
 	}
 
 	timeout := seg.Timestamp.Add(RetransmissionTimeout)
-	return time.Now().After(timeout)
+	return time.After(timeout)
 }
 
 type Connector interface {

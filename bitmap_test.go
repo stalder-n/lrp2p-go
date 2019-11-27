@@ -56,7 +56,7 @@ func TestBitmap_ToNumber(t *testing.T) {
 
 func TestBitmap_Init(t *testing.T) {
 	b := NewBitmap(7)
-	b.Init(123) //ob1111011
+	b.Init(0, 123) //ob1111011
 
 	assert.Equal(t, 7, len(b.bitmapData))
 	assert.Equal(t, uint32(1), b.bitmapData[0])

@@ -50,6 +50,12 @@ func (suite *segmentSuite) TestGetExpectedSequenceNumber() {
 	suite.Equal(uint32(100), c.getExpectedSequenceNumber())
 }
 
+func (suite *segmentSuite) Test_uint32ToBytes() {
+	test := uint32ToBytes(0)
+
+	suite.Equal(4, len(test))
+}
+
 func TestSegment(t *testing.T) {
 	suite.Run(t, &segmentSuite{})
 }

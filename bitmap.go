@@ -62,14 +62,16 @@ func (m *Bitmap) ToNumber() uint32 {
 	return result
 }
 
-func (m *Bitmap) Init(number uint32) *Bitmap {
+func (m *Bitmap) Init(seqNr uint32, bitmap uint32) *Bitmap {
 	i := uint32(0)
-	for num := uint32(0); number != 0; number = number / 2 {
-		num = number % 2
+	for num := uint32(0); bitmap != 0; bitmap = bitmap / 2 {
+		num = bitmap % 2
 		m.bitmapData[i] = num
 
 		i++
 	}
+
+	m.SeqNumber = seqNr
 
 	return m
 }
