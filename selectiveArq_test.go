@@ -85,10 +85,10 @@ func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 
 	currentTime := time.Now()
 
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 1}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 2}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 3}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &Segment{Timestamp: currentTime.Add(20000), SequenceNumber: []byte{0, 0, 0, 4}})
+	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 1}})
+	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 2}})
+	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(-1), SequenceNumber: []byte{0, 0, 0, 3}})
+	arq.NotAckedSegment = append(arq.NotAckedSegment, &Segment{Timestamp: currentTime.Add(20000), SequenceNumber: []byte{0, 0, 0, 4}})
 	arq.queueTimedOutSegmentsForWrite()
 
 	i := uint32(1)
@@ -222,11 +222,6 @@ func (suite *SelectiveArqTestSuite) TestSelectiveAckDropTwoOfEight() {
 	suite.readAck(suite.alphaArq, readBuffer)
 	suite.Equal(uint32(4), BytesToUint32(readBuffer))
 }
-
-func (suite *SelectiveArqTestSuite) TestHandleSelectiveAckAndResend() {
-	suite.FailNow("TODO")
-}
-
 
 func TestSelectiveArq(t *testing.T) {
 	suite.Run(t, new(SelectiveArqTestSuite))
