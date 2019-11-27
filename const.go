@@ -36,3 +36,5 @@ var FlagPosition = Position{1, 2}
 var SequencenumberPosition = Position{2, 6}
 
 var RetransmissionTimeout = 200 * time.Millisecond
+
+var timeZero = time.Time{}

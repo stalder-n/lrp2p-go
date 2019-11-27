@@ -60,18 +60,18 @@ func (suite *SelectiveArqTestSuite) TearDownTest() {
 }
 
 func (suite *SelectiveArqTestSuite) write(c Connector, data []byte) {
-	status, _, err := c.Write(data)
+	status, _, err := c.Write(data, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(Success, status)
 }
 func (suite *SelectiveArqTestSuite) read(c Connector, expected string, readBuffer []byte) {
-	status, n, err := c.Read(readBuffer)
+	status, n, err := c.Read(readBuffer, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
 	suite.Equal(Success, status)
 }
 func (suite *SelectiveArqTestSuite) readExpectStatus(c Connector, expected StatusCode, readBuffer []byte) {
-	status, _, err := c.Read(readBuffer)
+	status, _, err := c.Read(readBuffer, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
 }
@@ -117,7 +117,7 @@ func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 	suite.alphaArq.readyToSendSegmentQueue.Enqueue(seg3)
 	suite.alphaArq.readyToSendSegmentQueue.Enqueue(seg4)
 
-	_, _, err := suite.alphaArq.writeQueuedSegments()
+	_, _, err := suite.alphaArq.writeQueuedSegments(currentTime)
 
 	suite.True(suite.alphaArq.readyToSendSegmentQueue.IsEmpty())
 	suite.Nil(err)
@@ -132,7 +132,7 @@ func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
 	writeBuffer := []byte(message)
 
-	status, _, err := suite.alphaArq.Write(writeBuffer)
+	status, _, err := suite.alphaArq.Write(writeBuffer, time.Now())
 
 	suite.handleTestError(err)
 	suite.Equal(WindowFull, status)
@@ -150,33 +150,33 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, SegmentMtu)
 
-	suite.alphaArq.Write(writeBuffer)
+	suite.alphaArq.Write(writeBuffer, time.Now())
 
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
-	suite.betaArq.Read(readBuffer)
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time.Now())
 
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(2), BytesToUint32(readBuffer))
 
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(3), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(4), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(5), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(6), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(7), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(8), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer)
+	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(9), BytesToUint32(readBuffer))
 }
 
@@ -195,7 +195,7 @@ func (suite *SelectiveArqTestSuite) TestSelectiveAckDropTwoOfEight() {
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, SegmentMtu)
 
-	suite.alphaArq.Write(writeBuffer)
+	suite.alphaArq.Write(writeBuffer, time.Now())
 
 	suite.read(suite.betaArq, "ABCD", readBuffer)
 	suite.read(suite.betaArq, "EFGH", readBuffer)

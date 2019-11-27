@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"sync"
 	"testing"
+	"time"
 )
 
 type SecurityTestSuite struct {
@@ -50,17 +51,17 @@ func (suite *SecurityTestSuite) exchangeGreeting() {
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {
-		_, _, _ = suite.alphaConnection.Write([]byte(expected))
+		_, _, _ = suite.alphaConnection.Write([]byte(expected), time.Now())
 		buf := make([]byte, SegmentMtu)
-		_, n, _ := suite.alphaConnection.Read(buf)
+		_, n, _ := suite.alphaConnection.Read(buf, time.Now())
 		suite.Equal(expected, string(buf[:n]))
 		group.Done()
 	}()
 	go func() {
 		buf := make([]byte, SegmentMtu)
-		_, n, _ := suite.betaConnection.Read(buf)
+		_, n, _ := suite.betaConnection.Read(buf, time.Now())
 		suite.Equal(expected, string(buf[:n]))
-		_, _, _ = suite.betaConnection.Write([]byte(expected))
+		_, _, _ = suite.betaConnection.Write([]byte(expected), time.Now())
 		group.Done()
 	}()
 	group.Wait()

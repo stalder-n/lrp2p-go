@@ -60,18 +60,18 @@ func (suite *GoBackNArqTestSuite) TearDownTest() {
 }
 
 func (suite *GoBackNArqTestSuite) write(c Connector, data []byte) {
-	status, _, err := c.Write(data)
+	status, _, err := c.Write(data, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(Success, status)
 }
 func (suite *GoBackNArqTestSuite) read(c Connector, expected string, readBuffer []byte) {
-	status, n, err := c.Read(readBuffer)
+	status, n, err := c.Read(readBuffer, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
 	suite.Equal(Success, status)
 }
 func (suite *GoBackNArqTestSuite) readExpectStatus(c Connector, expected StatusCode, readBuffer []byte) {
-	status, _, err := c.Read(readBuffer)
+	status, _, err := c.Read(readBuffer, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
 }
@@ -96,7 +96,7 @@ func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 	readBuffer := make([]byte, SegmentMtu)
 	suite.write(suite.alphaArq, writeBuffer)
 	time.Sleep(RetransmissionTimeout)
-	suite.alphaArq.writeMissingSegment()
+	suite.alphaArq.writeMissingSegment(time.Now())
 	suite.read(suite.betaArq, message, readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
 	suite.Equal(uint32(1), suite.alphaArq.lastAckedSegmentSequenceNumber)

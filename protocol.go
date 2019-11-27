@@ -27,8 +27,8 @@ func HasSegmentTimedOut(seg *Segment) bool {
 }
 
 type Connector interface {
-	Read([]byte) (StatusCode, int, error)
-	Write([]byte) (StatusCode, int, error)
+	Read(buffer []byte, timestamp time.Time) (StatusCode, int, error)
+	Write(buffer []byte, timestamp time.Time) (StatusCode, int, error)
 	Open() error
 	Close() error
 	SetReadTimeout(time.Duration)

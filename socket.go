@@ -48,7 +48,7 @@ func (socket *Socket) Close() error {
 
 func (socket *Socket) Write(buffer []byte) (int, error) {
 	retryTimeout := 10 * time.Millisecond
-	statusCode, n, err := socket.connection.Write(buffer)
+	statusCode, n, err := socket.connection.Write(buffer, time.Now())
 	sumN := n
 
 	for statusCode != Success {
@@ -58,11 +58,11 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 		switch statusCode {
 		case WindowFull:
 			time.Sleep(retryTimeout)
-			statusCode, n, err = socket.connection.Write(nil)
+			statusCode, n, err = socket.connection.Write(nil, time.Now())
 			sumN += n
 		case PendingSegments:
 			time.Sleep(retryTimeout)
-			statusCode, n, err = socket.connection.Write(buffer)
+			statusCode, n, err = socket.connection.Write(buffer, time.Now())
 			sumN += n
 		}
 	}
@@ -88,7 +88,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 func (socket *Socket) read() {
 	for {
 		buffer := make([]byte, SegmentMtu)
-		statusCode, n, err := socket.connection.Read(buffer)
+		statusCode, n, err := socket.connection.Read(buffer, time.Now())
 		switch statusCode {
 		case Success:
 			p := &payload{n, err, buffer}

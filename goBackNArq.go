@@ -80,7 +80,7 @@ func (arq *goBackNArq) queueTimedOutSegmentsForWrite() {
 	}
 }
 
-func (arq *goBackNArq) writeQueuedSegments() (StatusCode, int, error) {
+func (arq *goBackNArq) writeQueuedSegments(timestamp time.Time) (StatusCode, int, error) {
 	sumN := 0
 	for !arq.readyToSendSegmentQueue.IsEmpty() {
 		if arq.window >= arq.windowSize {
@@ -88,7 +88,7 @@ func (arq *goBackNArq) writeQueuedSegments() (StatusCode, int, error) {
 		}
 
 		seg := arq.readyToSendSegmentQueue.Dequeue().(*Segment)
-		status, n, err := arq.extension.Write(seg.Buffer)
+		status, n, err := arq.extension.Write(seg.Buffer, timestamp)
 		seg.Timestamp = time.Now()
 
 		if err != nil {
@@ -102,32 +102,32 @@ func (arq *goBackNArq) writeQueuedSegments() (StatusCode, int, error) {
 	return Success, sumN, nil
 }
 
-func (arq *goBackNArq) Write(buffer []byte) (StatusCode, int, error) {
+func (arq *goBackNArq) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
 	//TODO consolidate window size handling
 	arq.parseAndQueueSegmentsForWrite(buffer)
 	arq.queueTimedOutSegmentsForWrite()
-	return arq.writeQueuedSegments()
+	return arq.writeQueuedSegments(timestamp)
 }
 
-func (arq *goBackNArq) writeAck(receivedSequenceNumber uint32) (StatusCode, int, error) {
+func (arq *goBackNArq) writeAck(receivedSequenceNumber uint32, timestamp time.Time) (StatusCode, int, error) {
 	ack := CreateAckSegment(arq.getAndIncrementCurrentSequenceNumber(), receivedSequenceNumber)
-	return arq.extension.Write(ack.Buffer)
+	return arq.extension.Write(ack.Buffer, timestamp)
 }
 
 func (arq *goBackNArq) hasAcksPending() bool {
 	return arq.lastAckedSegmentSequenceNumber < uint32(arq.notAckedSegmentQueue.Len())
 }
 
-func (arq *goBackNArq) Read(buffer []byte) (StatusCode, int, error) {
+func (arq *goBackNArq) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
 	buf := make([]byte, SegmentMtu)
-	status, n, err := arq.extension.Read(buf)
+	status, n, err := arq.extension.Read(buf, timestamp)
 	if err != nil {
 		return Fail, n, err
 	}
 	seg := CreateSegment(buf)
 
 	if seg.IsFlaggedAs(FlagACK) {
-		arq.handleAck(seg)
+		arq.handleAck(seg, timestamp)
 		return AckReceived, n, err
 	}
 
@@ -136,7 +136,7 @@ func (arq *goBackNArq) Read(buffer []byte) (StatusCode, int, error) {
 	}
 
 	if arq.lastInOrderNumber != 0 && seg.GetSequenceNumber() > arq.lastInOrderNumber+1 {
-		_, _, err = arq.writeAck(arq.lastInOrderNumber)
+		_, _, err = arq.writeAck(arq.lastInOrderNumber, timestamp)
 		return InvalidSegment, 0, err
 	}
 
@@ -145,27 +145,27 @@ func (arq *goBackNArq) Read(buffer []byte) (StatusCode, int, error) {
 	}
 
 	arq.lastInOrderNumber = seg.GetSequenceNumber()
-	_, _, err = arq.writeAck(seg.GetSequenceNumber())
+	_, _, err = arq.writeAck(seg.GetSequenceNumber(), timestamp)
 
 	copy(buffer, seg.Data)
 	return status, n - seg.GetHeaderSize(), err
 }
 
-func (arq *goBackNArq) handleAck(seg *Segment) {
+func (arq *goBackNArq) handleAck(seg *Segment, timestamp time.Time) {
 	ackedSegmentSequenceNumber := BytesToUint32(seg.Data)
 	if arq.notAckedSegmentQueue.Len() != 0 && arq.lastAckedSegmentSequenceNumber == ackedSegmentSequenceNumber {
-		arq.writeMissingSegment()
+		arq.writeMissingSegment(timestamp)
 	} else if arq.lastAckedSegmentSequenceNumber < ackedSegmentSequenceNumber {
 		arq.window -= ackedSegmentSequenceNumber - arq.lastAckedSegmentSequenceNumber
 		arq.lastAckedSegmentSequenceNumber = ackedSegmentSequenceNumber
 	}
 }
 
-func (arq *goBackNArq) writeMissingSegment() {
+func (arq *goBackNArq) writeMissingSegment(timestamp time.Time) {
 	missingSegments := arq.notAckedSegmentQueue.SearchBy(areElementsGreaterSequenceNumber(arq.lastAckedSegmentSequenceNumber))
 
 	arq.readyToSendSegmentQueue.PushFrontList(missingSegments)
-	arq.writeQueuedSegments()
+	arq.writeQueuedSegments(timestamp)
 }
 
 func (arq *goBackNArq) SetReadTimeout(t time.Duration) {

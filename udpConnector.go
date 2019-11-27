@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const timeoutErrorString = "i/o timeout"
+
 type udpConnector struct {
 	senderAddress string
 	senderPort    int
@@ -43,13 +45,30 @@ func (connector *udpConnector) Close() error {
 	return receiverError
 }
 
-func (connector *udpConnector) Write(buffer []byte) (StatusCode, int, error) {
+func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
 	n, err := connector.udpSender.Write(buffer)
 	return Success, n, err
 }
 
-func (connector *udpConnector) Read(buffer []byte) (StatusCode, int, error) {
+func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+	var deadline time.Time
+	if connector.timeout > 0 {
+		deadline = timestamp.Add(connector.timeout)
+	} else {
+		deadline = timeZero
+	}
+	err := connector.udpReceiver.SetReadDeadline(deadline)
+	reportError(err)
 	n, err := connector.udpReceiver.Read(buffer)
+	if err != nil {
+		switch err.(type) {
+		case *net.OpError:
+			if err.(*net.OpError).Err.Error() == timeoutErrorString {
+				return Timeout, n, nil
+			}
+		}
+		return Fail, n, err
+	}
 	return Success, n, err
 }
 

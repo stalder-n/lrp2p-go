@@ -43,9 +43,9 @@ func (sec *securityExtension) Close() error {
 	return sec.connector.Close()
 }
 
-func (sec *securityExtension) Write(buffer []byte) (StatusCode, int, error) {
+func (sec *securityExtension) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
 	if sec.handshake == nil {
-		payloadWritten := sec.initiateHandshake(buffer)
+		payloadWritten := sec.initiateHandshake(buffer, timestamp)
 		if payloadWritten {
 			return Success, len(buffer), nil
 		}
@@ -58,12 +58,12 @@ func (sec *securityExtension) Write(buffer []byte) (StatusCode, int, error) {
 	copy(buf[8:], encrypted)
 	binary.BigEndian.PutUint64(buf, sec.writeNonce)
 	sec.writeNonce++
-	return sec.connector.Write(buf)
+	return sec.connector.Write(buf, timestamp)
 }
 
-func (sec *securityExtension) Read(buffer []byte) (StatusCode, int, error) {
+func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
 	if sec.handshake == nil {
-		payload := sec.acceptHandshake()
+		payload := sec.acceptHandshake(timestamp)
 		if payload != nil {
 			copy(buffer, payload)
 			return Success, len(payload), nil
@@ -73,7 +73,7 @@ func (sec *securityExtension) Read(buffer []byte) (StatusCode, int, error) {
 		return WaitingForHandshake, 0, nil
 	}
 	encrypted := make([]byte, len(buffer))
-	statusCode, n, err := sec.connector.Read(encrypted)
+	statusCode, n, err := sec.connector.Read(encrypted, timestamp)
 	nonce := binary.BigEndian.Uint64(encrypted[:8])
 	nonceStatus := sec.syncNonces(nonce)
 	if nonceStatus != Success {
@@ -98,31 +98,35 @@ func (sec *securityExtension) syncNonces(nonce uint64) StatusCode {
 	return Success
 }
 
-func (sec *securityExtension) initiateHandshake(payload []byte) bool {
+func (sec *securityExtension) initiateHandshake(payload []byte, timestamp time.Time) (payloadWritten bool) {
 	sec.determineHandshakeStrategy()
 	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), true)
-	return sec.strategy.initiate(payload)
+	return sec.strategy.initiate(payload, timestamp)
 }
 
-func (sec *securityExtension) acceptHandshake() []byte {
+func (sec *securityExtension) acceptHandshake(timestamp time.Time) []byte {
 	sec.determineHandshakeStrategy()
 	sec.handshake = createHandshakeState(sec.key, sec.peerKey, sec.strategy.getPattern(), false)
-	return sec.strategy.accept()
+	return sec.strategy.accept(timestamp)
 }
 
-func (sec *securityExtension) writeHandshakeMessage(payload []byte) (*noise.CipherState, *noise.CipherState) {
+func (sec *securityExtension) writeHandshakeMessage(payload []byte, timestamp time.Time) (*noise.CipherState, *noise.CipherState) {
 	msg, cs0, cs1, err := sec.handshake.WriteMessage(nil, payload)
 	reportError(err)
-	_, _, _ = sec.connector.Write(msg)
+	_, _, _ = sec.connector.Write(msg, timestamp)
 	return cs0, cs1
 }
 
-func (sec *securityExtension) readHandshakeMessage() ([]byte, *noise.CipherState, *noise.CipherState) {
+func (sec *securityExtension) readHandshakeMessage(timestamp time.Time) (StatusCode, []byte, *noise.CipherState, *noise.CipherState) {
 	readBuffer := make([]byte, SegmentMtu)
-	_, n, _ := sec.connector.Read(readBuffer)
+	sec.SetReadTimeout(1 * time.Second)
+	statusCode, n, _ := sec.connector.Read(readBuffer, timestamp)
+	if statusCode == Timeout {
+		return Timeout, nil, nil, nil
+	}
 	payload, cs0, cs1, err := sec.handshake.ReadMessage(nil, readBuffer[:n])
 	reportError(err)
-	return payload, cs0, cs1
+	return Success, payload, cs0, cs1
 }
 
 func (sec *securityExtension) determineHandshakeStrategy() {
@@ -159,8 +163,8 @@ func reportError(err error) {
 }
 
 type handshakeStrategy interface {
-	initiate(payload []byte) bool
-	accept() []byte
+	initiate(payload []byte, timestamp time.Time) bool
+	accept(timestamp time.Time) []byte
 	getPattern() noise.HandshakePattern
 }
 
@@ -168,17 +172,17 @@ type handshakeXXStrategy struct {
 	sec *securityExtension
 }
 
-func (h *handshakeXXStrategy) initiate(payload []byte) bool {
-	h.sec.writeHandshakeMessage(nil)
-	h.sec.readHandshakeMessage()
-	h.sec.encrypter, h.sec.decrypter = h.sec.writeHandshakeMessage(nil)
+func (h *handshakeXXStrategy) initiate(payload []byte, timestamp time.Time) bool {
+	h.sec.writeHandshakeMessage(nil, timestamp)
+	h.sec.readHandshakeMessage(timestamp)
+	h.sec.encrypter, h.sec.decrypter = h.sec.writeHandshakeMessage(nil, timestamp)
 	return false
 }
 
-func (h *handshakeXXStrategy) accept() []byte {
-	h.sec.readHandshakeMessage()
-	h.sec.writeHandshakeMessage(nil)
-	_, h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage()
+func (h *handshakeXXStrategy) accept(timestamp time.Time) []byte {
+	h.sec.readHandshakeMessage(timestamp)
+	h.sec.writeHandshakeMessage(nil, timestamp)
+	_, _, h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage(timestamp)
 	return nil
 }
 
@@ -190,15 +194,42 @@ type handshakeKKStrategy struct {
 	sec *securityExtension
 }
 
-func (h *handshakeKKStrategy) initiate(payload []byte) bool {
-	h.sec.writeHandshakeMessage(payload)
-	_, h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage()
+func (h *handshakeKKStrategy) initiate(payload []byte, timestamp time.Time) bool {
+	h.sec.SetReadTimeout(1 * time.Second)
+	defer h.sec.SetReadTimeout(0)
+
+	code := Fail
+	for try := 0; code != Success && try < 3; try++ {
+		if try == 2 {
+			h.sec.SetReadTimeout(3 * time.Second)
+		}
+		h.sec.writeHandshakeMessage(payload, timestamp)
+		code, _, h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage(timestamp)
+	}
+	if code != Success {
+		panic("failed to establish connection")
+	}
 	return true
 }
 
-func (h *handshakeKKStrategy) accept() []byte {
-	payload, _, _ := h.sec.readHandshakeMessage()
-	h.sec.decrypter, h.sec.encrypter = h.sec.writeHandshakeMessage(nil)
+func (h *handshakeKKStrategy) accept(timestamp time.Time) []byte {
+	h.sec.SetReadTimeout(1 * time.Second)
+	defer h.sec.SetReadTimeout(0)
+
+	var payload []byte
+	code := Fail
+	for try := 0; code != Success && try < 3; try++ {
+		if try == 2 {
+			h.sec.SetReadTimeout(3 * time.Second)
+		}
+		code, payload, _, _ = h.sec.readHandshakeMessage(timestamp)
+
+	}
+	if code != Success {
+		panic("failed to establish connection")
+	}
+	h.sec.decrypter, h.sec.encrypter = h.sec.writeHandshakeMessage(nil, timestamp)
+
 	return payload
 }
 
