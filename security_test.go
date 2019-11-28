@@ -11,7 +11,8 @@ import (
 
 type SecurityTestSuite struct {
 	suite.Suite
-	alphaConnection, betaConnection *securityExtension
+	alphaSecurity, betaSecurity   *securityExtension
+	alphaConnector, betaConnector *ChannelConnector
 }
 
 func (suite *SecurityTestSuite) SetupTest() {
@@ -19,30 +20,33 @@ func (suite *SecurityTestSuite) SetupTest() {
 }
 
 func (suite *SecurityTestSuite) TearDownTest() {
-	suite.handleTestError(suite.alphaConnection.Close())
-	suite.handleTestError(suite.betaConnection.Close())
+	suite.handleTestError(suite.alphaSecurity.Close())
+	suite.handleTestError(suite.betaSecurity.Close())
 	SegmentMtu = DefaultMTU
 }
 
 func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
-	alphaConnector, betaConnector := &ChannelConnector{
-		In:  endpoint1,
-		Out: endpoint2,
+	startTime := time.Now()
+	suite.alphaConnector, suite.betaConnector = &ChannelConnector{
+		In:            endpoint1,
+		Out:           endpoint2,
+		artificialNow: startTime,
 	}, &ChannelConnector{
-		In:  endpoint2,
-		Out: endpoint1,
+		In:            endpoint2,
+		Out:           endpoint1,
+		artificialNow: startTime,
 	}
 
 	cipherSuite := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
 	alphaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
 	betaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
 	if peerKeyKnown {
-		suite.alphaConnection = newSecurityExtension(alphaConnector, &alphaKey, betaKey.Public)
-		suite.betaConnection = newSecurityExtension(betaConnector, &betaKey, alphaKey.Public)
+		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, betaKey.Public)
+		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, alphaKey.Public)
 	} else {
-		suite.alphaConnection = newSecurityExtension(alphaConnector, &alphaKey, nil)
-		suite.betaConnection = newSecurityExtension(betaConnector, &betaKey, nil)
+		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, nil)
+		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, nil)
 	}
 }
 
@@ -51,17 +55,17 @@ func (suite *SecurityTestSuite) exchangeGreeting() {
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {
-		_, _, _ = suite.alphaConnection.Write([]byte(expected), time.Now())
+		_, _, _ = suite.alphaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
 		buf := make([]byte, SegmentMtu)
-		_, n, _ := suite.alphaConnection.Read(buf, time.Now())
+		_, n, _ := suite.alphaSecurity.Read(buf, suite.alphaConnector.artificialNow)
 		suite.Equal(expected, string(buf[:n]))
 		group.Done()
 	}()
 	go func() {
 		buf := make([]byte, SegmentMtu)
-		_, n, _ := suite.betaConnection.Read(buf, time.Now())
+		_, n, _ := suite.betaSecurity.Read(buf, suite.alphaConnector.artificialNow)
 		suite.Equal(expected, string(buf[:n]))
-		_, _, _ = suite.betaConnection.Write([]byte(expected), time.Now())
+		_, _, _ = suite.betaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
 		group.Done()
 	}()
 	group.Wait()
