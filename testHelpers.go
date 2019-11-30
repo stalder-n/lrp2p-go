@@ -94,9 +94,10 @@ func (manipulator *SegmentManipulator) SetReadTimeout(t time.Duration) {
 }
 
 type ChannelConnector struct {
-	In      chan []byte
-	Out     chan []byte
-	timeout time.Duration
+	In            chan []byte
+	Out           chan []byte
+	timeout       time.Duration
+	artificialNow time.Time
 }
 
 func (connector *ChannelConnector) Open() error {
@@ -128,7 +129,7 @@ func (connector *ChannelConnector) Read(buffer []byte, timestamp time.Time) (Sta
 			}
 			copy(buffer, buff)
 			return Success, len(buff), nil
-		case <-after(timestamp, connector.timeout):
+		case <-connector.after(timestamp, connector.timeout):
 			return Timeout, 0, nil
 		}
 
@@ -140,7 +141,7 @@ func (connector *ChannelConnector) SetReadTimeout(t time.Duration) {
 	connector.In <- nil
 }
 
-func after(artificialNow time.Time, timeout time.Duration) <-chan time.Time {
-	artificialTimeout := artificialNow.Sub(time.Now().Add(timeout))
+func (connector *ChannelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
+	artificialTimeout := operationTime.Sub(connector.artificialNow) + timeout
 	return time.After(artificialTimeout)
 }
