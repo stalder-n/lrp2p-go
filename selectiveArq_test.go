@@ -54,24 +54,24 @@ func (suite *SelectiveArqTestSuite) TearDownTest() {
 	SegmentMtu = DefaultMTU
 }
 
-func (suite *SelectiveArqTestSuite) write(c Connector, data []byte) {
-	status, _, err := c.Write(data, time.Now())
+func (suite *SelectiveArqTestSuite) write(c Connector, data []byte, time time.Time) {
+	status, _, err := c.Write(data, time)
 	suite.handleTestError(err)
 	suite.Equal(Success, status)
 }
-func (suite *SelectiveArqTestSuite) read(c Connector, expected string, readBuffer []byte) {
-	status, n, err := c.Read(readBuffer, time.Now())
+func (suite *SelectiveArqTestSuite) read(c Connector, expected string, readBuffer []byte, time time.Time) {
+	status, n, err := c.Read(readBuffer, time)
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
 	suite.Equal(Success, status)
 }
-func (suite *SelectiveArqTestSuite) readExpectStatus(c Connector, expected StatusCode, readBuffer []byte) {
-	status, _, err := c.Read(readBuffer, time.Now())
+func (suite *SelectiveArqTestSuite) readExpectStatus(c Connector, expected StatusCode, readBuffer []byte, time time.Time) {
+	status, _, err := c.Read(readBuffer, time)
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
 }
-func (suite *SelectiveArqTestSuite) readAck(c Connector, readBuffer []byte) {
-	suite.readExpectStatus(c, AckReceived, readBuffer)
+func (suite *SelectiveArqTestSuite) readAck(c Connector, readBuffer []byte, time time.Time) {
+	suite.readExpectStatus(c, AckReceived, readBuffer, time)
 }
 
 func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
@@ -145,23 +145,27 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	writeBuffer := []byte(message)
 	readBuffer := make([]byte, SegmentMtu)
 
-	suite.alphaArq.Write(writeBuffer, time.Now())
+	time := time.Now()
 
-	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
+	suite.alphaArq.Write(writeBuffer, time)
 
-	suite.alphaArq.Read(readBuffer, time.Now())
+	suite.betaArq.Read(readBuffer, time)
+	suite.betaArq.Read(readBuffer, time)
+	suite.betaArq.Read(readBuffer, time)
+	suite.betaArq.Read(readBuffer, time)
+
+	suite.alphaArq.Read(readBuffer, time)
+
+	//Bitmap should be empty and leave only the expected seqNr
 	suite.Equal(uint32(2), BytesToUint32(readBuffer))
 
-	suite.alphaArq.Read(readBuffer, time.Now())
+	suite.alphaArq.Read(readBuffer, time)
 	suite.Equal(uint32(3), BytesToUint32(readBuffer))
 
-	suite.alphaArq.Read(readBuffer, time.Now())
+	suite.alphaArq.Read(readBuffer, time)
 	suite.Equal(uint32(4), BytesToUint32(readBuffer))
 
-	suite.alphaArq.Read(readBuffer, time.Now())
+	suite.alphaArq.Read(readBuffer, time)
 	suite.Equal(uint32(5), BytesToUint32(readBuffer))
 }
 
@@ -187,10 +191,18 @@ func (suite *SelectiveArqTestSuite) TestRetransmission() {
 	}
 
 	suite.alphaArq.Write(writeBuffer, time())
-	suite.betaArq.Read(readBuffer, time())
-	suite.betaArq.Read(readBuffer, time())
-	suite.alphaArq.Read(readBuffer, time())
-	suite.alphaArq.Read(readBuffer, time())
+
+	suite.read(suite.betaArq, "ABCD1234", readBuffer, time())
+	suite.read(suite.betaArq, "", readBuffer, time())
+
+	suite.readAck(suite.alphaArq, readBuffer, time())
+	suite.readAck(suite.alphaArq, readBuffer, time())
+
+	suite.read(suite.betaArq, "", readBuffer, time())
+	suite.read(suite.betaArq, "EFGH5678", readBuffer, time())
+
+	suite.readAck(suite.alphaArq, readBuffer, time())
+	suite.readAck(suite.alphaArq, readBuffer, time())
 }
 
 func TestSelectiveArq(t *testing.T) {
