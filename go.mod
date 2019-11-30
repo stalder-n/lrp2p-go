@@ -1,4 +1,4 @@
-module go-protocol
+module github.com/nicosta1132/go-protocol
 
 go 1.13
 
