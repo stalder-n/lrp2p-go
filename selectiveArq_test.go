@@ -134,7 +134,7 @@ func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 }
 
 func (suite *SelectiveArqTestSuite) TestSendingACKs() {
-	SegmentMtu = HeaderLength + 4
+	SegmentMtu = HeaderLength + 8
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
 
@@ -151,71 +151,18 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	suite.betaArq.Read(readBuffer, time.Now())
 	suite.betaArq.Read(readBuffer, time.Now())
 	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
-	suite.betaArq.Read(readBuffer, time.Now())
 
 	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(2), BytesToUint32(readBuffer))
 
 	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(3), BytesToUint32(readBuffer))
+
 	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(4), BytesToUint32(readBuffer))
+
 	suite.alphaArq.Read(readBuffer, time.Now())
 	suite.Equal(uint32(5), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer, time.Now())
-	suite.Equal(uint32(6), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer, time.Now())
-	suite.Equal(uint32(7), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer, time.Now())
-	suite.Equal(uint32(8), BytesToUint32(readBuffer))
-	suite.alphaArq.Read(readBuffer, time.Now())
-	suite.Equal(uint32(9), BytesToUint32(readBuffer))
-}
-
-func (suite *SelectiveArqTestSuite) TestSelectiveAckDropTwoOfEight() {
-	SegmentMtu = HeaderLength + 4
-	suite.alphaArq.windowSize = 8
-	suite.betaArq.windowSize = 8
-
-	suite.alphaArq.Open()
-	suite.betaArq.Open()
-
-	suite.alphaManipulator.DropOnce(4)
-	suite.alphaManipulator.DropOnce(5)
-
-	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
-	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
-
-	suite.alphaArq.Write(writeBuffer, time.Now())
-
-	suite.read(suite.betaArq, "ABCD", readBuffer)
-	suite.read(suite.betaArq, "EFGH", readBuffer)
-	suite.read(suite.betaArq, "IJKL", readBuffer)
-	suite.read(suite.betaArq, "", readBuffer)
-	suite.read(suite.betaArq, "", readBuffer)
-	suite.read(suite.betaArq, "", readBuffer)
-
-	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(2), BytesToUint32(readBuffer))
-
-	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(3), BytesToUint32(readBuffer))
-
-	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(4), BytesToUint32(readBuffer))
-
-	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(4), BytesToUint32(readBuffer))
-
-	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(4), BytesToUint32(readBuffer))
-
-	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(4), BytesToUint32(readBuffer))
 }
 
 func (suite *SelectiveArqTestSuite) TestRetransmission() {
