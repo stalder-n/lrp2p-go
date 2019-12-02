@@ -6,29 +6,29 @@ import (
 	"time"
 )
 
-var SequenceNumberFactory = func() uint32 {
+var sequenceNumberFactory = func() uint32 {
 	b := make([]byte, 4)
 	_, err := rand.Read(b)
 	handleError(err)
-	sequenceNum := BytesToUint32(b)
+	sequenceNum := bytesToUint32(b)
 	if sequenceNum == 0 {
 		sequenceNum++
 	}
 	return sequenceNum
 }
 
-func HasSegmentTimedOut(seg *Segment, time time.Time) bool {
+func hasSegmentTimedOut(seg *segment, time time.Time) bool {
 	if seg == nil {
 		return false
 	}
 
-	timeout := seg.Timestamp.Add(RetransmissionTimeout)
+	timeout := seg.timestamp.Add(retransmissionTimeout)
 	return time.After(timeout)
 }
 
 type Connector interface {
-	Read(buffer []byte, timestamp time.Time) (StatusCode, int, error)
-	Write(buffer []byte, timestamp time.Time) (StatusCode, int, error)
+	Read(buffer []byte, timestamp time.Time) (statusCode, int, error)
+	Write(buffer []byte, timestamp time.Time) (statusCode, int, error)
 	Open() error
 	Close() error
 	SetReadTimeout(time.Duration)

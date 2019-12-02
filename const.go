@@ -3,38 +3,38 @@ package atp
 import "time"
 
 const (
-	FlagACK          byte = 1
-	FlagSYN          byte = 2
-	FlagSelectiveACK byte = 4
+	flagACK          byte = 1
+	flagSYN          byte = 2
+	flagSelectiveACK byte = 4
 )
 const (
-	DefaultMTU   = 64
-	HeaderLength = 6
+	defaultMTU   = 64
+	headerLength = 6
 )
 
-type StatusCode int
+type statusCode int
 
 const (
-	Success StatusCode = iota
-	Fail
-	AckReceived
-	PendingSegments
-	InvalidSegment
-	WindowFull
-	WaitingForHandshake
-	InvalidNonce
-	Timeout
+	success statusCode = iota
+	fail
+	ackReceived
+	pendingSegments
+	invalidSegment
+	windowFull
+	waitingForHandshake
+	invalidNonce
+	timeout
 )
 
-type Position struct {
+type position struct {
 	Start int
 	End   int
 }
 
-var DataoffsetPosition = Position{0, 1}
-var FlagPosition = Position{1, 2}
-var SequencenumberPosition = Position{2, 6}
+var dataOffsetPosition = position{0, 1}
+var flagPosition = position{1, 2}
+var sequenceNumberPosition = position{2, 6}
 
-var RetransmissionTimeout = 200 * time.Millisecond
+var retransmissionTimeout = 200 * time.Millisecond
 
 var timeZero = time.Time{}

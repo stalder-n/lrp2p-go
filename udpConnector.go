@@ -45,12 +45,12 @@ func (connector *udpConnector) Close() error {
 	return receiverError
 }
 
-func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	n, err := connector.udpSender.Write(buffer)
-	return Success, n, err
+	return success, n, err
 }
 
-func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	var deadline time.Time
 	if connector.timeout > 0 {
 		deadline = timestamp.Add(connector.timeout)
@@ -64,12 +64,12 @@ func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (StatusC
 		switch err.(type) {
 		case *net.OpError:
 			if err.(*net.OpError).Err.Error() == timeoutErrorString {
-				return Timeout, n, nil
+				return timeout, n, nil
 			}
 		}
-		return Fail, n, err
+		return fail, n, err
 	}
-	return Success, n, err
+	return success, n, err
 }
 
 func (connector *udpConnector) SetReadTimeout(t time.Duration) {

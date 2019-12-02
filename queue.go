@@ -6,55 +6,55 @@ import (
 	"sync"
 )
 
-type Queue struct {
+type queue struct {
 	list        *list.List
 	elementType reflect.Type
 }
 
-func NewQueue() *Queue {
-	q := &Queue{}
+func newQueue() *queue {
+	q := &queue{}
 	q.list = &list.List{}
 	q.list.Init()
 
 	return q
 }
 
-//TODO Conditional compilation In Golang - http://blog.ralch.com/tutorial/golang-conditional-compilation/
-func (q *Queue) setType(value interface{}) {
+//TODO Conditional compilation in Golang - http://blog.ralch.com/tutorial/golang-conditional-compilation/
+func (q *queue) setType(value interface{}) {
 	if q.elementType == nil {
 		q.elementType = reflect.TypeOf(value)
 	}
 }
 
-//TODO Conditional compilation In Golang
-func (q *Queue) checkType(value interface{}) {
+//TODO Conditional compilation in Golang
+func (q *queue) checkType(value interface{}) {
 	if reflect.TypeOf(value).Name() != q.elementType.Name() {
 		panic("TypeOf value and TypeOf container does not match: '" + reflect.TypeOf(value).Name() + "' '" + q.elementType.Name() + "'")
 	}
 }
 
-func (q *Queue) Enqueue(value interface{}) {
+func (q *queue) Enqueue(value interface{}) {
 	q.setType(value)
 	q.checkType(value)
 	q.list.PushBack(value)
 }
 
-func (q *Queue) EnqueueList(queue *Queue) {
+func (q *queue) EnqueueList(queue *queue) {
 	q.list.PushBackList(queue.list)
 }
 
-func (q *Queue) PushFront(value interface{}) {
+func (q *queue) PushFront(value interface{}) {
 	q.setType(value)
 	q.checkType(value)
 
 	q.list.PushFront(value)
 }
 
-func (q *Queue) PushFrontList(values *list.List) {
+func (q *queue) PushFrontList(values *list.List) {
 	q.list.PushFrontList(values)
 }
 
-func (q *Queue) Dequeue() interface{} {
+func (q *queue) Dequeue() interface{} {
 	if q.IsEmpty() {
 		return nil
 	}
@@ -63,22 +63,22 @@ func (q *Queue) Dequeue() interface{} {
 	return elem.Value
 }
 
-func (q *Queue) Peek() interface{} {
+func (q *queue) Peek() interface{} {
 	if q.IsEmpty() {
 		return nil
 	}
 	return q.list.Front().Value
 }
 
-func (q *Queue) IsEmpty() bool {
+func (q *queue) IsEmpty() bool {
 	return q.Len() == 0
 }
 
-func (q *Queue) Len() int {
+func (q *queue) Len() int {
 	return q.list.Len()
 }
 
-func (q *Queue) SearchBy(comparator func(interface{}) bool) *list.List {
+func (q *queue) SearchBy(comparator func(interface{}) bool) *list.List {
 	sl := list.New()
 
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
@@ -91,36 +91,36 @@ func (q *Queue) SearchBy(comparator func(interface{}) bool) *list.List {
 }
 
 type concurrencyQueue struct {
-	Queue
+	queue
 	mutex sync.RWMutex
 }
 
 func (q *concurrencyQueue) Enqueue(value interface{}) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
-	q.Queue.Enqueue(value)
+	q.queue.Enqueue(value)
 }
 
 func (q *concurrencyQueue) PushFront(value interface{}) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
-	q.Queue.PushFront(value)
+	q.queue.PushFront(value)
 }
 
 func (q *concurrencyQueue) Dequeue() interface{} {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
-	return q.Queue.Dequeue()
+	return q.queue.Dequeue()
 }
 
 func (q *concurrencyQueue) Peek() interface{} {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
-	return q.Queue.Dequeue()
+	return q.queue.Dequeue()
 }
 
 func (q *concurrencyQueue) IsEmpty() bool {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
-	return q.Queue.IsEmpty()
+	return q.queue.IsEmpty()
 }

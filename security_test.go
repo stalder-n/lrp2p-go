@@ -12,29 +12,29 @@ import (
 type SecurityTestSuite struct {
 	suite.Suite
 	alphaSecurity, betaSecurity   *securityExtension
-	alphaConnector, betaConnector *ChannelConnector
+	alphaConnector, betaConnector *channelConnector
 }
 
 func (suite *SecurityTestSuite) SetupTest() {
-	SegmentMtu = 128
+	segmentMtu = 128
 }
 
 func (suite *SecurityTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaSecurity.Close())
 	suite.handleTestError(suite.betaSecurity.Close())
-	SegmentMtu = DefaultMTU
+	segmentMtu = defaultMTU
 }
 
 func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	startTime := time.Now()
-	suite.alphaConnector, suite.betaConnector = &ChannelConnector{
-		In:            endpoint1,
-		Out:           endpoint2,
+	suite.alphaConnector, suite.betaConnector = &channelConnector{
+		in:            endpoint1,
+		out:           endpoint2,
 		artificialNow: startTime,
-	}, &ChannelConnector{
-		In:            endpoint2,
-		Out:           endpoint1,
+	}, &channelConnector{
+		in:            endpoint2,
+		out:           endpoint1,
 		artificialNow: startTime,
 	}
 
@@ -56,13 +56,13 @@ func (suite *SecurityTestSuite) exchangeGreeting() {
 	group.Add(2)
 	go func() {
 		_, _, _ = suite.alphaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
-		buf := make([]byte, SegmentMtu)
+		buf := make([]byte, segmentMtu)
 		_, n, _ := suite.alphaSecurity.Read(buf, suite.alphaConnector.artificialNow)
 		suite.Equal(expected, string(buf[:n]))
 		group.Done()
 	}()
 	go func() {
-		buf := make([]byte, SegmentMtu)
+		buf := make([]byte, segmentMtu)
 		_, n, _ := suite.betaSecurity.Read(buf, suite.alphaConnector.artificialNow)
 		suite.Equal(expected, string(buf[:n]))
 		_, _, _ = suite.betaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)

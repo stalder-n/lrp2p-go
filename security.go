@@ -43,15 +43,15 @@ func (sec *securityExtension) Close() error {
 	return sec.connector.Close()
 }
 
-func (sec *securityExtension) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+func (sec *securityExtension) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	if sec.handshake == nil {
 		payloadWritten := sec.initiateHandshake(buffer, timestamp)
 		if payloadWritten {
-			return Success, len(buffer), nil
+			return success, len(buffer), nil
 		}
 	}
 	if sec.encrypter == nil {
-		return WaitingForHandshake, 0, nil
+		return waitingForHandshake, 0, nil
 	}
 	encrypted := sec.encrypter.Cipher().Encrypt(nil, sec.writeNonce, nil, buffer)
 	buf := make([]byte, 8+len(encrypted))
@@ -61,22 +61,22 @@ func (sec *securityExtension) Write(buffer []byte, timestamp time.Time) (StatusC
 	return sec.connector.Write(buf, timestamp)
 }
 
-func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	if sec.handshake == nil {
 		payload := sec.acceptHandshake(timestamp)
 		if payload != nil {
 			copy(buffer, payload)
-			return Success, len(payload), nil
+			return success, len(payload), nil
 		}
 	}
 	if sec.decrypter == nil {
-		return WaitingForHandshake, 0, nil
+		return waitingForHandshake, 0, nil
 	}
 	encrypted := make([]byte, len(buffer))
 	statusCode, n, err := sec.connector.Read(encrypted, timestamp)
 	nonce := binary.BigEndian.Uint64(encrypted[:8])
 	nonceStatus := sec.syncNonces(nonce)
-	if nonceStatus != Success {
+	if nonceStatus != success {
 		return nonceStatus, 0, nil
 	}
 	decryptedMsg, err := sec.decrypter.Cipher().Decrypt(nil, nonce, nil, encrypted[8:n])
@@ -90,12 +90,12 @@ func (sec *securityExtension) SetReadTimeout(t time.Duration) {
 
 // Checks if the received nonce has been used before and returns an appropriate
 // status code
-func (sec *securityExtension) syncNonces(nonce uint64) StatusCode {
+func (sec *securityExtension) syncNonces(nonce uint64) statusCode {
 	if _, ok := sec.usedNonces[nonce]; ok {
-		return InvalidNonce
+		return invalidNonce
 	}
 	sec.usedNonces[nonce] = 1
-	return Success
+	return success
 }
 
 func (sec *securityExtension) initiateHandshake(payload []byte, timestamp time.Time) (payloadWritten bool) {
@@ -117,16 +117,16 @@ func (sec *securityExtension) writeHandshakeMessage(payload []byte, timestamp ti
 	return cs0, cs1
 }
 
-func (sec *securityExtension) readHandshakeMessage(timestamp time.Time) (StatusCode, []byte, *noise.CipherState, *noise.CipherState) {
-	readBuffer := make([]byte, SegmentMtu)
+func (sec *securityExtension) readHandshakeMessage(timestamp time.Time) (statusCode, []byte, *noise.CipherState, *noise.CipherState) {
+	readBuffer := make([]byte, segmentMtu)
 	sec.SetReadTimeout(1 * time.Second)
 	statusCode, n, _ := sec.connector.Read(readBuffer, timestamp)
-	if statusCode == Timeout {
-		return Timeout, nil, nil, nil
+	if statusCode == timeout {
+		return timeout, nil, nil, nil
 	}
 	payload, cs0, cs1, err := sec.handshake.ReadMessage(nil, readBuffer[:n])
 	reportError(err)
-	return Success, payload, cs0, cs1
+	return success, payload, cs0, cs1
 }
 
 func (sec *securityExtension) determineHandshakeStrategy() {
@@ -198,15 +198,15 @@ func (h *handshakeKKStrategy) initiate(payload []byte, timestamp time.Time) bool
 	h.sec.SetReadTimeout(1 * time.Second)
 	defer h.sec.SetReadTimeout(0)
 
-	code := Fail
-	for try := 0; code != Success && try < 3; try++ {
+	code := fail
+	for try := 0; code != success && try < 3; try++ {
 		if try == 2 {
 			h.sec.SetReadTimeout(3 * time.Second)
 		}
 		h.sec.writeHandshakeMessage(payload, timestamp)
 		code, _, h.sec.encrypter, h.sec.decrypter = h.sec.readHandshakeMessage(timestamp)
 	}
-	if code != Success {
+	if code != success {
 		panic("failed to establish connection")
 	}
 	return true
@@ -217,15 +217,15 @@ func (h *handshakeKKStrategy) accept(timestamp time.Time) []byte {
 	defer h.sec.SetReadTimeout(0)
 
 	var payload []byte
-	code := Fail
-	for try := 0; code != Success && try < 3; try++ {
+	code := fail
+	for try := 0; code != success && try < 3; try++ {
 		if try == 2 {
 			h.sec.SetReadTimeout(3 * time.Second)
 		}
 		code, payload, _, _ = h.sec.readHandshakeMessage(timestamp)
 
 	}
-	if code != Success {
+	if code != success {
 		panic("failed to establish connection")
 	}
 	h.sec.decrypter, h.sec.encrypter = h.sec.writeHandshakeMessage(nil, timestamp)

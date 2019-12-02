@@ -51,16 +51,16 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 	statusCode, n, err := socket.connection.Write(buffer, time.Now())
 	sumN := n
 
-	for statusCode != Success {
+	for statusCode != success {
 		if err != nil {
 			return sumN, err
 		}
 		switch statusCode {
-		case WindowFull:
+		case windowFull:
 			time.Sleep(retryTimeout)
 			statusCode, n, err = socket.connection.Write(nil, time.Now())
 			sumN += n
-		case PendingSegments:
+		case pendingSegments:
 			time.Sleep(retryTimeout)
 			statusCode, n, err = socket.connection.Write(buffer, time.Now())
 			sumN += n
@@ -87,15 +87,15 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 
 func (socket *Socket) read() {
 	for {
-		buffer := make([]byte, SegmentMtu)
+		buffer := make([]byte, segmentMtu)
 		statusCode, n, err := socket.connection.Read(buffer, time.Now())
 		switch statusCode {
-		case Success:
+		case success:
 			p := &payload{n, err, buffer}
 			socket.readQueue.Enqueue(p)
 			socket.dataAvailable.Signal()
-		case AckReceived:
-		case InvalidNonce:
+		case ackReceived:
+		case invalidNonce:
 		}
 	}
 }

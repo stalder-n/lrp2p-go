@@ -1,37 +1,37 @@
 package atp
 
-type Bitmap struct {
+type bitmap struct {
 	bitmapData []uint32
 	data       []interface{}
-	SeqNumber  uint32
+	seqNumber  uint32
 }
 
-func NewBitmap(size uint32) *Bitmap {
-	result := &Bitmap{}
+func newBitmap(size uint32) *bitmap {
+	result := &bitmap{}
 	result.bitmapData = make([]uint32, size)
 	result.data = make([]interface{}, size)
 
 	return result
 }
 
-func (m *Bitmap) Add(seqNr uint32, data interface{}) {
-	if m.SeqNumber == 0 {
-		m.SeqNumber = seqNr
+func (m *bitmap) Add(seqNr uint32, data interface{}) {
+	if m.seqNumber == 0 {
+		m.seqNumber = seqNr
 	}
 
-	index := seqNr - m.SeqNumber
+	index := seqNr - m.seqNumber
 	m.bitmapData[index] = 1
 	m.data[index] = data
 }
 
-func (m *Bitmap) Slide() {
+func (m *bitmap) Slide() {
 	for m.SlideOne() {
 	}
 }
 
-func (m *Bitmap) SlideOne() bool {
+func (m *bitmap) SlideOne() bool {
 	if m.bitmapData[0] == 1 {
-		m.SeqNumber++
+		m.seqNumber++
 		for i := 0; i < len(m.bitmapData)-1; i++ {
 			m.bitmapData[i] = m.bitmapData[i+1]
 			if m.data != nil {
@@ -44,7 +44,7 @@ func (m *Bitmap) SlideOne() bool {
 	return false
 }
 
-func (m *Bitmap) Get(seqNr uint32) (bit uint32, data interface{}) {
+func (m *bitmap) Get(seqNr uint32) (bit uint32, data interface{}) {
 	bit = m.bitmapData[seqNr]
 	if m.data != nil {
 		data = m.data[seqNr]
@@ -52,7 +52,7 @@ func (m *Bitmap) Get(seqNr uint32) (bit uint32, data interface{}) {
 	return
 }
 
-func (m *Bitmap) ToNumber() uint32 {
+func (m *bitmap) ToNumber() uint32 {
 	result := uint32(0)
 	for i := 0; i < len(m.bitmapData); i++ {
 		ele, _ := m.Get(uint32(i))
@@ -62,7 +62,7 @@ func (m *Bitmap) ToNumber() uint32 {
 	return result
 }
 
-func (m *Bitmap) Init(seqNr uint32, bitmap uint32) *Bitmap {
+func (m *bitmap) Init(seqNr uint32, bitmap uint32) *bitmap {
 	i := uint32(0)
 	for num := uint32(0); bitmap != 0; bitmap = bitmap / 2 {
 		num = bitmap % 2
@@ -71,12 +71,12 @@ func (m *Bitmap) Init(seqNr uint32, bitmap uint32) *Bitmap {
 		i++
 	}
 
-	m.SeqNumber = seqNr
+	m.seqNumber = seqNr
 
 	return m
 }
 
-func (m *Bitmap) GetAndRemoveInorder() interface{} {
+func (m *bitmap) GetAndRemoveInorder() interface{} {
 	if m.bitmapData[0] == uint32(1) {
 		seg := m.data[0]
 		m.SlideOne()

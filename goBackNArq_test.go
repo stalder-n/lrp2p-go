@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-func newMockConnection(connector *ChannelConnector, name string) (*goBackNArq, *SegmentManipulator) {
+func newMockConnection(connector *channelConnector, name string) (*goBackNArq, *segmentManipulator) {
 	arq := goBackNArq{}
-	printer := &ConsolePrinter{Name: name}
-	manipulator := &SegmentManipulator{}
+	printer := &consolePrinter{Name: name}
+	manipulator := &segmentManipulator{}
 
 	arq.addExtension(printer)
 	printer.AddExtension(manipulator)
@@ -27,8 +27,8 @@ func newMockConnection(connector *ChannelConnector, name string) (*goBackNArq, *
 type GoBackNArqTestSuite struct {
 	suite.Suite
 	alphaArq, betaArq                 *goBackNArq
-	alphaManipulator, betaManipulator *SegmentManipulator
-	sequenceNumberQueue               *Queue
+	alphaManipulator, betaManipulator *segmentManipulator
+	sequenceNumberQueue               *queue
 }
 
 func (suite *GoBackNArqTestSuite) handleTestError(err error) {
@@ -38,17 +38,17 @@ func (suite *GoBackNArqTestSuite) handleTestError(err error) {
 }
 func (suite *GoBackNArqTestSuite) SetupTest() {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
-	connector1, connector2 := &ChannelConnector{
-		In:  endpoint1,
-		Out: endpoint2,
-	}, &ChannelConnector{
-		In:  endpoint2,
-		Out: endpoint1,
+	connector1, connector2 := &channelConnector{
+		in:  endpoint1,
+		out: endpoint2,
+	}, &channelConnector{
+		in:  endpoint2,
+		out: endpoint1,
 	}
 	suite.alphaArq, suite.alphaManipulator = newMockConnection(connector1, "alpha")
 	suite.betaArq, suite.betaManipulator = newMockConnection(connector2, "beta")
 
-	suite.sequenceNumberQueue = NewQueue()
+	suite.sequenceNumberQueue = newQueue()
 	suite.sequenceNumberQueue.Enqueue(uint32(1))
 	suite.sequenceNumberQueue.Enqueue(uint32(2))
 
@@ -56,33 +56,33 @@ func (suite *GoBackNArqTestSuite) SetupTest() {
 	suite.handleTestError(suite.betaArq.Open())
 }
 func (suite *GoBackNArqTestSuite) TearDownTest() {
-	SegmentMtu = DefaultMTU
+	segmentMtu = defaultMTU
 }
 
 func (suite *GoBackNArqTestSuite) write(c Connector, data []byte) {
 	status, _, err := c.Write(data, time.Now())
 	suite.handleTestError(err)
-	suite.Equal(Success, status)
+	suite.Equal(success, status)
 }
 func (suite *GoBackNArqTestSuite) read(c Connector, expected string, readBuffer []byte) {
 	status, n, err := c.Read(readBuffer, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
-	suite.Equal(Success, status)
+	suite.Equal(success, status)
 }
-func (suite *GoBackNArqTestSuite) readExpectStatus(c Connector, expected StatusCode, readBuffer []byte) {
+func (suite *GoBackNArqTestSuite) readExpectStatus(c Connector, expected statusCode, readBuffer []byte) {
 	status, _, err := c.Read(readBuffer, time.Now())
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
 }
 func (suite *GoBackNArqTestSuite) readAck(c Connector, readBuffer []byte) {
-	suite.readExpectStatus(c, AckReceived, readBuffer)
+	suite.readExpectStatus(c, ackReceived, readBuffer)
 }
 
 func (suite *GoBackNArqTestSuite) TestSendInOneSegment() {
 	message := "Hello, World!"
 	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
+	readBuffer := make([]byte, segmentMtu)
 	suite.write(suite.alphaArq, writeBuffer)
 	suite.read(suite.betaArq, message, readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
@@ -90,12 +90,12 @@ func (suite *GoBackNArqTestSuite) TestSendInOneSegment() {
 }
 func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 	suite.alphaManipulator.DropOnce(1)
-	RetransmissionTimeout = 20 * time.Millisecond
+	retransmissionTimeout = 20 * time.Millisecond
 	message := "Hello, World!"
 	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
+	readBuffer := make([]byte, segmentMtu)
 	suite.write(suite.alphaArq, writeBuffer)
-	time.Sleep(RetransmissionTimeout)
+	time.Sleep(retransmissionTimeout)
 	suite.alphaArq.writeMissingSegment(time.Now())
 	suite.read(suite.betaArq, message, readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
@@ -103,10 +103,10 @@ func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 }
 func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.sequenceNumberQueue.Enqueue(uint32(1))
-	SegmentMtu = HeaderLength + 4
+	segmentMtu = headerLength + 4
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
+	readBuffer := make([]byte, segmentMtu)
 	suite.write(suite.alphaArq, writeBuffer)
 	suite.read(suite.betaArq, "test", readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
@@ -117,15 +117,15 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.Equal(uint32(3), suite.alphaArq.lastAckedSegmentSequenceNumber)
 }
 func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
-	SegmentMtu = HeaderLength + 4
+	segmentMtu = headerLength + 4
 	suite.alphaManipulator.DropOnce(2)
 	message := "testTESTtEsT"
 	writeBuffer := []byte(message)
-	readBuffer := make([]byte, SegmentMtu)
+	readBuffer := make([]byte, segmentMtu)
 	suite.write(suite.alphaArq, writeBuffer)
 	suite.read(suite.betaArq, "test", readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.readExpectStatus(suite.betaArq, InvalidSegment, readBuffer)
+	suite.readExpectStatus(suite.betaArq, invalidSegment, readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
 	suite.read(suite.betaArq, "TEST", readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)

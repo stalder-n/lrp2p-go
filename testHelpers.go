@@ -8,140 +8,150 @@ import (
 	"time"
 )
 
-type ConsolePrinter struct {
+type consolePrinter struct {
 	extension Connector
 	Name      string
 }
 
-func (printer *ConsolePrinter) Open() error {
+func (printer *consolePrinter) Open() error {
 	err := printer.extension.Open()
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Open()", "error:", fmt.Sprintf("%+v", err))
 	return err
 }
-func (printer *ConsolePrinter) Close() error {
+
+func (printer *consolePrinter) Close() error {
 	err := printer.extension.Close()
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Close()", "error:", fmt.Sprintf("%+v", err))
 	return err
 }
-func (printer *ConsolePrinter) AddExtension(connector Connector) {
+
+func (printer *consolePrinter) AddExtension(connector Connector) {
 	printer.extension = connector
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "addExtension(...)", "connector:", fmt.Sprintf("%+v", connector))
 }
-func (printer *ConsolePrinter) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+
+func (printer *consolePrinter) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	status, n, err := printer.extension.Read(buffer, time.Now())
 	printer.prettyPrint(buffer, "Read(...)", status, n, err)
 
 	return status, n, err
 }
-func (printer *ConsolePrinter) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+
+func (printer *consolePrinter) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	statusCode, n, err := printer.extension.Write(buffer, time.Now())
 	printer.prettyPrint(buffer, "Write(...)", statusCode, n, err)
 
 	return statusCode, n, err
 }
-func (printer *ConsolePrinter) prettyPrint(buffer []byte, funcName string, status StatusCode, n int, error error) {
+
+func (printer *consolePrinter) prettyPrint(buffer []byte, funcName string, status statusCode, n int, error error) {
 	var str string
-	if IsFlaggedAs(buffer[FlagPosition.Start], FlagACK) {
-		str = fmt.Sprintf("%d %d", buffer[:HeaderLength], bytes.Trim(buffer[HeaderLength:], "\x00"))
-	} else if IsFlaggedAs(buffer[FlagPosition.Start], FlagSYN) || buffer[FlagPosition.Start] == 0 {
-		str = fmt.Sprintf("%d %s", buffer[:HeaderLength], bytes.Trim(buffer[HeaderLength:], "\x00"))
-	} else if IsFlaggedAs(buffer[FlagPosition.Start], FlagSelectiveACK) {
-		str = fmt.Sprintf("%d %d / %b", buffer[:HeaderLength], buffer[HeaderLength:], buffer[HeaderLength:])
+	if isFlaggedAs(buffer[flagPosition.Start], flagACK) {
+		str = fmt.Sprintf("%d %d", buffer[:headerLength], bytes.Trim(buffer[headerLength:], "\x00"))
+	} else if isFlaggedAs(buffer[flagPosition.Start], flagSYN) || buffer[flagPosition.Start] == 0 {
+		str = fmt.Sprintf("%d %s", buffer[:headerLength], bytes.Trim(buffer[headerLength:], "\x00"))
+	} else if isFlaggedAs(buffer[flagPosition.Start], flagSelectiveACK) {
+		str = fmt.Sprintf("%d %d / %b", buffer[:headerLength], buffer[headerLength:], buffer[headerLength:])
 	} else {
-		str = fmt.Sprintf("CHECK_PRINTER %d %s", buffer[:HeaderLength], bytes.Trim(buffer[HeaderLength:], "\x00"))
+		str = fmt.Sprintf("CHECK_PRINTER %d %s", buffer[:headerLength], bytes.Trim(buffer[headerLength:], "\x00"))
 	}
 	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), funcName, "buffer:", str, "status:", status, "n:", n, "error:", fmt.Sprintf("%+v", error))
 }
 
-func (printer *ConsolePrinter) SetReadTimeout(t time.Duration) {
+func (printer *consolePrinter) SetReadTimeout(t time.Duration) {
 	printer.extension.SetReadTimeout(t)
 }
 
-type SegmentManipulator struct {
+type segmentManipulator struct {
 	savedSegments map[uint32][]byte
 	toDropOnce    list.List
 	extension     Connector
 }
 
-func (manipulator *SegmentManipulator) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	return manipulator.extension.Read(buffer, time.Now())
 }
-func (manipulator *SegmentManipulator) Open() error {
+
+func (manipulator *segmentManipulator) Open() error {
 	return manipulator.extension.Open()
 }
-func (manipulator *SegmentManipulator) Close() error {
+
+func (manipulator *segmentManipulator) Close() error {
 	return manipulator.extension.Close()
 }
-func (manipulator *SegmentManipulator) AddExtension(connector Connector) {
+
+func (manipulator *segmentManipulator) AddExtension(connector Connector) {
 	manipulator.extension = connector
 }
-func (manipulator *SegmentManipulator) DropOnce(sequenceNumber uint32) {
+
+func (manipulator *segmentManipulator) DropOnce(sequenceNumber uint32) {
 	manipulator.toDropOnce.PushFront(sequenceNumber)
 }
-func (manipulator *SegmentManipulator) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
-	seg := CreateSegment(buffer)
+
+func (manipulator *segmentManipulator) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	seg := createSegment(buffer)
 	for elem := manipulator.toDropOnce.Front(); elem != nil; elem = elem.Next() {
-		if elem.Value.(uint32) == seg.GetSequenceNumber() {
+		if elem.Value.(uint32) == seg.getSequenceNumber() {
 			manipulator.toDropOnce.Remove(elem)
-			return Success, len(buffer), nil
+			return success, len(buffer), nil
 		}
 	}
 	return manipulator.extension.Write(buffer, time.Now())
 }
 
-func (manipulator *SegmentManipulator) SetReadTimeout(t time.Duration) {
+func (manipulator *segmentManipulator) SetReadTimeout(t time.Duration) {
 	manipulator.extension.SetReadTimeout(t)
 }
 
-type ChannelConnector struct {
-	In            chan []byte
-	Out           chan []byte
+type channelConnector struct {
+	in            chan []byte
+	out           chan []byte
 	timeout       time.Duration
 	artificialNow time.Time
 }
 
-func (connector *ChannelConnector) Open() error {
+func (connector *channelConnector) Open() error {
 	return nil
 }
 
-func (connector *ChannelConnector) Close() error {
-	close(connector.In)
+func (connector *channelConnector) Close() error {
+	close(connector.in)
 	return nil
 }
 
-func (connector *ChannelConnector) Write(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
-	connector.Out <- buffer
-	return Success, len(buffer), nil
+func (connector *channelConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	connector.out <- buffer
+	return success, len(buffer), nil
 }
 
-func (connector *ChannelConnector) Read(buffer []byte, timestamp time.Time) (StatusCode, int, error) {
+func (connector *channelConnector) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	var buff []byte
 	if connector.timeout == 0 {
-		buff = <-connector.In
+		buff = <-connector.in
 		copy(buffer, buff)
-		return Success, len(buff), nil
+		return success, len(buff), nil
 	}
 	for {
 		select {
-		case buff = <-connector.In:
+		case buff = <-connector.in:
 			if buff == nil {
 				continue
 			}
 			copy(buffer, buff)
-			return Success, len(buff), nil
+			return success, len(buff), nil
 		case <-connector.after(timestamp, connector.timeout):
-			return Timeout, 0, nil
+			return timeout, 0, nil
 		}
 
 	}
 }
 
-func (connector *ChannelConnector) SetReadTimeout(t time.Duration) {
+func (connector *channelConnector) SetReadTimeout(t time.Duration) {
 	connector.timeout = t
-	connector.In <- nil
+	connector.in <- nil
 }
 
-func (connector *ChannelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
+func (connector *channelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
 	artificialTimeout := operationTime.Sub(connector.artificialNow) + timeout
 	return time.After(artificialTimeout)
 }
