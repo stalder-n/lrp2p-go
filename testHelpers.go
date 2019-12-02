@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"reflect"
+	"testing"
 	"time"
 )
 
@@ -144,4 +146,10 @@ func (connector *ChannelConnector) SetReadTimeout(t time.Duration) {
 func (connector *ChannelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
 	artificialTimeout := operationTime.Sub(connector.artificialNow) + timeout
 	return time.After(artificialTimeout)
+}
+
+func handleTestError(t *testing.T, err error) {
+	if err != nil {
+		assert.Errorf(t, err, "Error occurred")
+	}
 }

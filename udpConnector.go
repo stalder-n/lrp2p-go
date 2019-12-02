@@ -6,15 +6,34 @@ import (
 	"time"
 )
 
+type udpConnector struct {
+	udpSender   *net.UDPConn
+	udpReceiver *net.UDPConn
+	timeout     time.Duration
+}
+
 const timeoutErrorString = "i/o timeout"
 
-type udpConnector struct {
-	senderAddress string
-	senderPort    int
-	receiverPort  int
-	udpSender     *net.UDPConn
-	udpReceiver   *net.UDPConn
-	timeout       time.Duration
+func newUdpConnector(remoteHostname string, remotePort, localPort int) (*udpConnector, error) {
+	remoteAddress := createUdpAddress(remoteHostname, remotePort)
+	localAddress := createUdpAddress("localhost", localPort)
+
+	udpSender, err := net.DialUDP("udp4", nil, remoteAddress)
+	if err != nil {
+		return nil, err
+	}
+	udpReceiver, err := net.ListenUDP("udp4", localAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	connector := &udpConnector{
+		udpSender:   udpSender,
+		udpReceiver: udpReceiver,
+		timeout:     0,
+	}
+
+	return connector, nil
 }
 
 func createUdpAddress(addressString string, port int) *net.UDPAddr {
@@ -25,15 +44,7 @@ func createUdpAddress(addressString string, port int) *net.UDPAddr {
 }
 
 func (connector *udpConnector) Open() error {
-	senderAddress := createUdpAddress(connector.senderAddress, connector.senderPort)
-	receiverAddress := createUdpAddress("localhost", connector.receiverPort)
-	var err error = nil
-	connector.udpSender, err = net.DialUDP("udp4", nil, senderAddress)
-	if err != nil {
-		return err
-	}
-	connector.udpReceiver, err = net.ListenUDP("udp4", receiverAddress)
-	return err
+	return nil
 }
 
 func (connector *udpConnector) Close() error {
