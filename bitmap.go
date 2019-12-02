@@ -1,4 +1,4 @@
-package goprotocol
+package atp
 
 type Bitmap struct {
 	bitmapData []uint32

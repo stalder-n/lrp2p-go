@@ -1,4 +1,4 @@
-package goprotocol
+package atp
 
 import (
 	"sync"
