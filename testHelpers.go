@@ -3,10 +3,13 @@ package atp
 import (
 	"bytes"
 	"container/list"
+	"flag"
 	"fmt"
 	"reflect"
 	"time"
 )
+
+var flagVerbose = flag.Bool("v", false, "show more detailed console output")
 
 type consolePrinter struct {
 	extension Connector
@@ -15,31 +18,41 @@ type consolePrinter struct {
 
 func (printer *consolePrinter) Open() error {
 	err := printer.extension.Open()
-	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Open()", "error:", fmt.Sprintf("%+v", err))
+	if *flagVerbose {
+		println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Open()", "error:", fmt.Sprintf("%+v", err))
+	}
 	return err
 }
 
 func (printer *consolePrinter) Close() error {
 	err := printer.extension.Close()
-	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Close()", "error:", fmt.Sprintf("%+v", err))
+	if *flagVerbose {
+		println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Close()", "error:", fmt.Sprintf("%+v", err))
+	}
 	return err
 }
 
 func (printer *consolePrinter) AddExtension(connector Connector) {
 	printer.extension = connector
-	println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "addExtension(...)", "connector:", fmt.Sprintf("%+v", connector))
+	if *flagVerbose {
+		println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "addExtension(...)", "connector:", fmt.Sprintf("%+v", connector))
+	}
 }
 
 func (printer *consolePrinter) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	status, n, err := printer.extension.Read(buffer, time.Now())
-	printer.prettyPrint(buffer, "Read(...)", status, n, err)
+	if *flagVerbose {
+		printer.prettyPrint(buffer, "Read(...)", status, n, err)
+	}
 
 	return status, n, err
 }
 
 func (printer *consolePrinter) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	statusCode, n, err := printer.extension.Write(buffer, time.Now())
-	printer.prettyPrint(buffer, "Write(...)", statusCode, n, err)
+	if *flagVerbose {
+		printer.prettyPrint(buffer, "Write(...)", statusCode, n, err)
+	}
 
 	return statusCode, n, err
 }
