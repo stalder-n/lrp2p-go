@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-var sequenceNumberFactory = func() uint32 {
+var generateRandomSequenceNumber = func() uint32 {
 	b := make([]byte, 4)
 	_, err := rand.Read(b)
 	handleError(err)
@@ -36,7 +36,7 @@ type Connector interface {
 
 func connect(connector Connector) Connector {
 	sec := newSecurityExtension(connector, nil, nil)
-	arq := newGoBackNArq(sec)
+	arq := newSelectiveArq(generateRandomSequenceNumber(), sec)
 	return arq
 }
 

@@ -86,7 +86,7 @@ func (suite *GoBackNArqTestSuite) TestSendInOneSegment() {
 	suite.write(suite.alphaArq, writeBuffer)
 	suite.read(suite.betaArq, message, readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(1), suite.alphaArq.lastAckedSegmentSequenceNumber)
+	suite.Equal(uint32(1), suite.alphaArq.lastInOrderNumber)
 }
 func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 	suite.alphaManipulator.DropOnce(1)
@@ -99,7 +99,7 @@ func (suite *GoBackNArqTestSuite) TestRetransmissionByTimeout() {
 	suite.alphaArq.writeMissingSegment(time.Now())
 	suite.read(suite.betaArq, message, readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(1), suite.alphaArq.lastAckedSegmentSequenceNumber)
+	suite.Equal(uint32(1), suite.alphaArq.lastInOrderNumber)
 }
 func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.sequenceNumberQueue.Enqueue(uint32(1))
@@ -114,7 +114,7 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsInOrder() {
 	suite.readAck(suite.alphaArq, readBuffer)
 	suite.read(suite.betaArq, "tEsT", readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(3), suite.alphaArq.lastAckedSegmentSequenceNumber)
+	suite.Equal(uint32(3), suite.alphaArq.lastInOrderNumber)
 }
 func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
 	segmentMtu = headerLength + 4
@@ -131,7 +131,7 @@ func (suite *GoBackNArqTestSuite) TestSendSegmentsOutOfOrder() {
 	suite.readAck(suite.alphaArq, readBuffer)
 	suite.read(suite.betaArq, "tEsT", readBuffer)
 	suite.readAck(suite.alphaArq, readBuffer)
-	suite.Equal(uint32(3), suite.alphaArq.lastAckedSegmentSequenceNumber)
+	suite.Equal(uint32(3), suite.alphaArq.lastInOrderNumber)
 }
 
 func TestGoBackNArq(t *testing.T) {

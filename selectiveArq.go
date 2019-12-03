@@ -15,36 +15,29 @@ type selectiveArq struct {
 	currentSequenceNumber   uint32
 	window                  uint32
 	windowSize              uint32
-	sequenceNumberFactory   func() uint32
+}
+
+func newSelectiveArq(initialSequenceNumber uint32, extension Connector) *selectiveArq {
+	var windowSize uint32 = 20
+	arq := &selectiveArq{
+		extension:               extension,
+		readyToSendSegmentQueue: newQueue(),
+		notAckedSegment:         make([]*segment, windowSize),
+		ackedBitmap:             newEmptyBitmap(windowSize),
+		currentSequenceNumber:   initialSequenceNumber,
+		windowSize:              windowSize,
+	}
+	return arq
 }
 
 func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
 	result := arq.currentSequenceNumber
-	arq.currentSequenceNumber = arq.currentSequenceNumber + 1
-
+	arq.currentSequenceNumber++
 	return result
 }
 
 func (arq *selectiveArq) Open() error {
-	if arq.windowSize == 0 {
-		arq.windowSize = 20
-	}
-	arq.readyToSendSegmentQueue = newQueue()
-	arq.notAckedSegment = make([]*segment, arq.windowSize)
-	arq.ackedBitmap = newEmptyBitmap(arq.windowSize)
-
-	if arq.sequenceNumberFactory == nil {
-		arq.sequenceNumberFactory = sequenceNumberFactory
-	}
-
-	arq.currentSequenceNumber = arq.sequenceNumberFactory()
-
-	if arq.extension != nil {
-		return arq.extension.Open()
-
-	}
-
-	return nil
+	return arq.extension.Open()
 }
 
 func (arq *selectiveArq) Close() error {

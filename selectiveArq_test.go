@@ -7,7 +7,7 @@ import (
 )
 
 func newMockSelectiveArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
-	arq := selectiveArq{}
+	arq := newSelectiveArq(1, nil)
 	printer := &consolePrinter{Name: name}
 	manipulator := &segmentManipulator{}
 
@@ -15,13 +15,7 @@ func newMockSelectiveArqConnection(connector *channelConnector, name string) (*s
 	manipulator.AddExtension(printer)
 	printer.AddExtension(connector)
 
-	fu := func() uint32 {
-		return 1
-	}
-
-	arq.sequenceNumberFactory = fu
-
-	return &arq, manipulator
+	return arq, manipulator
 }
 
 type SelectiveArqTestSuite struct {
@@ -52,6 +46,8 @@ func (suite *SelectiveArqTestSuite) SetupTest() {
 }
 func (suite *SelectiveArqTestSuite) TearDownTest() {
 	segmentMtu = defaultMTU
+	suite.handleTestError(suite.alphaArq.Close())
+	suite.handleTestError(suite.betaArq.Close())
 }
 
 func (suite *SelectiveArqTestSuite) write(c Connector, data []byte, time time.Time) {
@@ -75,20 +71,17 @@ func (suite *SelectiveArqTestSuite) readAck(c Connector, readBuffer []byte, time
 }
 
 func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
-	arq := selectiveArq{}
-	arq.Open()
-
 	currentTime := time.Now()
 
-	arq.notAckedSegment = append(arq.notAckedSegment, &segment{timestamp: currentTime.Add(-1), sequenceNumber: []byte{0, 0, 0, 1}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &segment{timestamp: currentTime.Add(-1), sequenceNumber: []byte{0, 0, 0, 2}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &segment{timestamp: currentTime.Add(-1), sequenceNumber: []byte{0, 0, 0, 3}})
-	arq.notAckedSegment = append(arq.notAckedSegment, &segment{timestamp: currentTime.Add(20000), sequenceNumber: []byte{0, 0, 0, 4}})
-	arq.queueTimedOutSegmentsForWrite(currentTime)
+	suite.alphaArq.notAckedSegment = append(suite.alphaArq.notAckedSegment, &segment{timestamp: currentTime.Add(-1), sequenceNumber: []byte{0, 0, 0, 1}})
+	suite.alphaArq.notAckedSegment = append(suite.alphaArq.notAckedSegment, &segment{timestamp: currentTime.Add(-1), sequenceNumber: []byte{0, 0, 0, 2}})
+	suite.alphaArq.notAckedSegment = append(suite.alphaArq.notAckedSegment, &segment{timestamp: currentTime.Add(-1), sequenceNumber: []byte{0, 0, 0, 3}})
+	suite.alphaArq.notAckedSegment = append(suite.alphaArq.notAckedSegment, &segment{timestamp: currentTime.Add(20000), sequenceNumber: []byte{0, 0, 0, 4}})
+	suite.alphaArq.queueTimedOutSegmentsForWrite(currentTime)
 
 	i := uint32(1)
-	for !arq.readyToSendSegmentQueue.IsEmpty() {
-		ele := arq.readyToSendSegmentQueue.Dequeue()
+	for !suite.alphaArq.readyToSendSegmentQueue.IsEmpty() {
+		ele := suite.alphaArq.readyToSendSegmentQueue.Dequeue()
 		suite.Equal(i, ele.(*segment).getSequenceNumber())
 		suite.NotEqual(4, ele.(*segment).getSequenceNumber())
 		i++
@@ -121,8 +114,6 @@ func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	segmentMtu = headerLength + 4
 	suite.alphaArq.windowSize = 8
-	suite.alphaArq.Open()
-	suite.betaArq.Open()
 
 	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
 	writeBuffer := []byte(message)
@@ -137,9 +128,6 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	segmentMtu = headerLength + 8
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
-
-	suite.alphaArq.Open()
-	suite.betaArq.Open()
 
 	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
 	writeBuffer := []byte(message)
@@ -174,8 +162,6 @@ func (suite *SelectiveArqTestSuite) TestRetransmission() {
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
 	retransmissionTimeout = 40 * time.Millisecond
-	suite.alphaArq.Open()
-	suite.betaArq.Open()
 
 	suite.alphaManipulator.DropOnce(2)
 	suite.alphaManipulator.DropOnce(3)
@@ -185,24 +171,24 @@ func (suite *SelectiveArqTestSuite) TestRetransmission() {
 	readBuffer := make([]byte, segmentMtu)
 
 	now := time.Now()
-	time := func() time.Time {
+	timestamp := func() time.Time {
 		now = now.Add(10 * time.Millisecond)
 		return now
 	}
 
-	suite.alphaArq.Write(writeBuffer, time())
+	suite.alphaArq.Write(writeBuffer, timestamp())
 
-	suite.read(suite.betaArq, "ABCD1234", readBuffer, time())
-	suite.read(suite.betaArq, "", readBuffer, time())
+	suite.read(suite.betaArq, "ABCD1234", readBuffer, timestamp())
+	suite.read(suite.betaArq, "", readBuffer, timestamp())
 
-	suite.readAck(suite.alphaArq, readBuffer, time())
-	suite.readAck(suite.alphaArq, readBuffer, time())
+	suite.readAck(suite.alphaArq, readBuffer, timestamp())
+	suite.readAck(suite.alphaArq, readBuffer, timestamp())
 
-	suite.read(suite.betaArq, "", readBuffer, time())
-	suite.read(suite.betaArq, "EFGH5678", readBuffer, time())
+	suite.read(suite.betaArq, "", readBuffer, timestamp())
+	suite.read(suite.betaArq, "EFGH5678", readBuffer, timestamp())
 
-	suite.readAck(suite.alphaArq, readBuffer, time())
-	suite.readAck(suite.alphaArq, readBuffer, time())
+	suite.readAck(suite.alphaArq, readBuffer, timestamp())
+	suite.readAck(suite.alphaArq, readBuffer, timestamp())
 }
 
 func TestSelectiveArq(t *testing.T) {

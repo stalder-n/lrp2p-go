@@ -12,16 +12,16 @@ type Socket struct {
 	isReading     bool
 }
 
-func NewSocket(address string, senderPort, receiverPort int) *Socket {
+func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
 	connector := &udpConnector{
-		senderAddress: address,
-		senderPort:    senderPort,
-		receiverPort:  receiverPort,
+		senderAddress: remoteHost,
+		senderPort:    remotePort,
+		receiverPort:  localPort,
 	}
-	return newSocket(connector, address, senderPort, receiverPort)
+	return newSocket(connector, remoteHost, remotePort, localPort)
 }
 
-func newSocket(connector Connector, address string, senderPort, receiverPort int) *Socket {
+func newSocket(connector Connector, remoteHost string, remotePort, localPort int) *Socket {
 	socket := &Socket{connection: connect(connector)}
 	socket.dataAvailable = sync.NewCond(&sync.Mutex{})
 	return socket

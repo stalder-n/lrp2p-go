@@ -5,16 +5,15 @@ import (
 )
 
 type goBackNArq struct {
-	extension                      Connector
-	notAckedSegmentQueue           *queue
-	readyToSendSegmentQueue        *queue
-	lastAckedSegmentSequenceNumber uint32
-	lastInOrderNumber              uint32
-	initialSequenceNumber          uint32
-	currentSequenceNumber          uint32
-	window                         uint32
-	windowSize                     uint32
-	sequenceNumberFactory          func() uint32
+	extension               Connector
+	notAckedSegmentQueue    *queue
+	readyToSendSegmentQueue *queue
+	lastInOrderNumber       uint32
+	initialSequenceNumber   uint32
+	currentSequenceNumber   uint32
+	window                  uint32
+	windowSize              uint32
+	sequenceNumberFactory   func() uint32
 }
 
 func newGoBackNArq(extension Connector) *goBackNArq {
@@ -40,13 +39,13 @@ func (arq *goBackNArq) Open() error {
 	arq.notAckedSegmentQueue = newQueue()
 
 	if arq.sequenceNumberFactory == nil {
-		arq.sequenceNumberFactory = sequenceNumberFactory
+		arq.sequenceNumberFactory = generateRandomSequenceNumber
 	}
 
 	arq.initialSequenceNumber = arq.sequenceNumberFactory()
 	arq.currentSequenceNumber = arq.initialSequenceNumber
 	arq.lastInOrderNumber = arq.initialSequenceNumber - 1
-	arq.lastAckedSegmentSequenceNumber = arq.initialSequenceNumber - 1
+	arq.lastInOrderNumber = arq.initialSequenceNumber - 1
 
 	return arq.extension.Open()
 }
@@ -115,7 +114,7 @@ func (arq *goBackNArq) writeAck(receivedSequenceNumber uint32, timestamp time.Ti
 }
 
 func (arq *goBackNArq) hasAcksPending() bool {
-	return arq.lastAckedSegmentSequenceNumber < uint32(arq.notAckedSegmentQueue.Len())
+	return arq.lastInOrderNumber < uint32(arq.notAckedSegmentQueue.Len())
 }
 
 func (arq *goBackNArq) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
@@ -153,16 +152,16 @@ func (arq *goBackNArq) Read(buffer []byte, timestamp time.Time) (statusCode, int
 
 func (arq *goBackNArq) handleAck(seg *segment, timestamp time.Time) {
 	ackedSegmentSequenceNumber := bytesToUint32(seg.data)
-	if arq.notAckedSegmentQueue.Len() != 0 && arq.lastAckedSegmentSequenceNumber == ackedSegmentSequenceNumber {
+	if arq.notAckedSegmentQueue.Len() != 0 && arq.lastInOrderNumber == ackedSegmentSequenceNumber {
 		arq.writeMissingSegment(timestamp)
-	} else if arq.lastAckedSegmentSequenceNumber < ackedSegmentSequenceNumber {
-		arq.window -= ackedSegmentSequenceNumber - arq.lastAckedSegmentSequenceNumber
-		arq.lastAckedSegmentSequenceNumber = ackedSegmentSequenceNumber
+	} else if arq.lastInOrderNumber < ackedSegmentSequenceNumber {
+		arq.window -= ackedSegmentSequenceNumber - arq.lastInOrderNumber
+		arq.lastInOrderNumber = ackedSegmentSequenceNumber
 	}
 }
 
 func (arq *goBackNArq) writeMissingSegment(timestamp time.Time) {
-	missingSegments := arq.notAckedSegmentQueue.SearchBy(areElementsGreaterSequenceNumber(arq.lastAckedSegmentSequenceNumber))
+	missingSegments := arq.notAckedSegmentQueue.SearchBy(areElementsGreaterSequenceNumber(arq.lastInOrderNumber))
 
 	arq.readyToSendSegmentQueue.PushFrontList(missingSegments)
 	_, _, err := arq.writeQueuedSegments(timestamp)
