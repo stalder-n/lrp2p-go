@@ -59,11 +59,9 @@ func (printer *consolePrinter) Write(buffer []byte, timestamp time.Time) (status
 
 func (printer *consolePrinter) prettyPrint(buffer []byte, funcName string, status statusCode, n int, error error) {
 	var str string
-	if isFlaggedAs(buffer[flagPosition.Start], flagACK) {
-		str = fmt.Sprintf("%d %d", buffer[:headerLength], bytes.Trim(buffer[headerLength:], "\x00"))
-	} else if isFlaggedAs(buffer[flagPosition.Start], flagSYN) || buffer[flagPosition.Start] == 0 {
+	if isFlaggedAs(buffer[flagPosition.Start], flagSYN) || buffer[flagPosition.Start] == 0 {
 		str = fmt.Sprintf("%d %s", buffer[:headerLength], bytes.Trim(buffer[headerLength:], "\x00"))
-	} else if isFlaggedAs(buffer[flagPosition.Start], flagSelectiveACK) {
+	} else if isFlaggedAs(buffer[flagPosition.Start], flagACK) {
 		str = fmt.Sprintf("%d %d / %b", buffer[:headerLength], buffer[headerLength:], buffer[headerLength:])
 	} else {
 		str = fmt.Sprintf("CHECK_PRINTER %d %s", buffer[:headerLength], bytes.Trim(buffer[headerLength:], "\x00"))

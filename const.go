@@ -3,9 +3,8 @@ package atp
 import "time"
 
 const (
-	flagACK          byte = 1
-	flagSYN          byte = 2
-	flagSelectiveACK byte = 4
+	flagACK byte = 1
+	flagSYN byte = 2
 )
 const (
 	defaultMTU   = 64

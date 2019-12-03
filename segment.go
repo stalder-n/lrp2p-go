@@ -107,7 +107,7 @@ func createSelectiveAckSegment(sequenceNumber uint32, bitmap *bitmap) *segment {
 
 	data := append(first, second...)
 
-	return createFlaggedSegment(sequenceNumber, flagSelectiveACK, data)
+	return createFlaggedSegment(sequenceNumber, flagACK, data)
 }
 
 func createSegments(buffer []byte, seqNumFactory func() uint32) *queue {

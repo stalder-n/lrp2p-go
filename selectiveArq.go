@@ -113,7 +113,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	}
 	seg := createSegment(buf)
 
-	if seg.isFlaggedAs(flagSelectiveACK) {
+	if seg.isFlaggedAs(flagACK) {
 		arq.handleSelectiveAck(seg, timestamp)
 		copy(buffer, seg.data)
 		return ackReceived, n, err
@@ -150,7 +150,8 @@ func clear(b []byte) {
 func (arq *selectiveArq) handleSelectiveAck(seg *segment, timestamp time.Time) {
 	arq.removeAckedSegment(seg.data)
 	arq.queueTimedOutSegmentsForWrite(timestamp)
-	arq.writeQueuedSegments(timestamp)
+	_, _, err := arq.writeQueuedSegments(timestamp)
+	reportError(err)
 }
 
 func (arq *selectiveArq) removeAckedSegment(data []byte) {
