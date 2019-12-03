@@ -31,7 +31,7 @@ func (arq *selectiveArq) Open() error {
 	}
 	arq.readyToSendSegmentQueue = newQueue()
 	arq.notAckedSegment = make([]*segment, arq.windowSize)
-	arq.ackedBitmap = newBitmap(arq.windowSize)
+	arq.ackedBitmap = newEmptyBitmap(arq.windowSize)
 
 	if arq.sequenceNumberFactory == nil {
 		arq.sequenceNumberFactory = sequenceNumberFactory
@@ -129,8 +129,8 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	}
 
 	if segOrdered != nil {
-		copy(buffer, segOrdered.(*segment).data)
-		return status, len(segOrdered.(*segment).data), err
+		copy(buffer, segOrdered.data)
+		return status, len(segOrdered.data), err
 	} else {
 		clear(buffer)
 		return status, 0, err
@@ -154,11 +154,11 @@ func (arq *selectiveArq) handleSelectiveAck(seg *segment, timestamp time.Time) {
 }
 
 func (arq *selectiveArq) removeAckedSegment(data []byte) {
-	ackedSequenceNumberBitmap := newBitmap(arq.windowSize).Init(bytesToUint32(data[0:4]), bytesToUint32(data[4:]))
+	ackedSequenceNumberBitmap := newBitmap(arq.windowSize, bytesToUint32(data[0:4]), bytesToUint32(data[4:]))
 
 	//due to slide of receiver we have to adjust our array
 	for index, ele := range arq.notAckedSegment {
-		if ele != nil && ele.getSequenceNumber() < ackedSequenceNumberBitmap.seqNumber {
+		if ele != nil && ele.getSequenceNumber() < ackedSequenceNumberBitmap.sequenceNumber {
 			arq.notAckedSegment[index] = nil
 		}
 	}
@@ -166,7 +166,7 @@ func (arq *selectiveArq) removeAckedSegment(data []byte) {
 	//remove out of order acked segment
 	for i, ele := range ackedSequenceNumberBitmap.bitmapData {
 		if ele == 1 {
-			index := (ackedSequenceNumberBitmap.seqNumber + uint32(i)) % arq.windowSize
+			index := (ackedSequenceNumberBitmap.sequenceNumber + uint32(i)) % arq.windowSize
 			arq.notAckedSegment[index] = nil
 			arq.window--
 		}

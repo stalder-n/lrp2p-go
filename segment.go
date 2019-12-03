@@ -102,7 +102,7 @@ func createAckSegment(sequenceNumber uint32, receivedSequenceNumber uint32) *seg
 }
 
 func createSelectiveAckSegment(sequenceNumber uint32, bitmap *bitmap) *segment {
-	first := uint32ToBytes(bitmap.seqNumber)
+	first := uint32ToBytes(bitmap.sequenceNumber)
 	second := uint32ToBytes(bitmap.ToNumber())
 
 	data := append(first, second...)
