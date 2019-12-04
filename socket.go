@@ -12,13 +12,10 @@ type Socket struct {
 	isReading     bool
 }
 
-func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
-	connector := &udpConnector{
-		senderAddress: remoteHost,
-		senderPort:    remotePort,
-		receiverPort:  localPort,
-	}
-	return newSocket(connector, remoteHost, remotePort, localPort)
+func NewSocket(address string, senderPort, receiverPort int) *Socket {
+	connector, err := newUdpConnector(address, senderPort, receiverPort)
+	reportError(err)
+	return newSocket(connector, address, senderPort, receiverPort)
 }
 
 func newSocket(connector Connector, remoteHost string, remotePort, localPort int) *Socket {
