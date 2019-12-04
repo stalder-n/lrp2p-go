@@ -107,7 +107,7 @@ func (socket *Socket) checkForSegmentTimeout() {
 	for {
 		select {
 		case <-time.After(timeoutCheckInterval):
-
+			
 		}
 	}
 }
