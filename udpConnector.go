@@ -14,9 +14,9 @@ type udpConnector struct {
 
 const timeoutErrorString = "i/o timeout"
 
-func newUdpConnector(remoteHostname string, remotePort, localPort int) (*udpConnector, error) {
-	remoteAddress := createUdpAddress(remoteHostname, remotePort)
-	localAddress := createUdpAddress("localhost", localPort)
+func newUDPConnector(remoteHostname string, remotePort, localPort int) (*udpConnector, error) {
+	remoteAddress := createUDPAddress(remoteHostname, remotePort)
+	localAddress := createUDPAddress("localhost", localPort)
 
 	udpSender, err := net.DialUDP("udp4", nil, remoteAddress)
 	if err != nil {
@@ -36,7 +36,7 @@ func newUdpConnector(remoteHostname string, remotePort, localPort int) (*udpConn
 	return connector, nil
 }
 
-func createUdpAddress(addressString string, port int) *net.UDPAddr {
+func createUDPAddress(addressString string, port int) *net.UDPAddr {
 	address := addressString + ":" + strconv.Itoa(port)
 	udpAddress, err := net.ResolveUDPAddr("udp4", address)
 	handleError(err)

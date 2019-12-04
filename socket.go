@@ -13,7 +13,7 @@ type Socket struct {
 }
 
 func NewSocket(address string, senderPort, receiverPort int) *Socket {
-	connector, err := newUdpConnector(address, senderPort, receiverPort)
+	connector, err := newUDPConnector(address, senderPort, receiverPort)
 	reportError(err)
 	return newSocket(connector)
 }
