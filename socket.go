@@ -12,8 +12,8 @@ type Socket struct {
 	isReading     bool
 }
 
-func NewSocket(address string, senderPort, receiverPort int) *Socket {
-	connector, err := newUDPConnector(address, senderPort, receiverPort)
+func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
+	connector, err := newUDPConnector(remoteHost, remotePort, localPort)
 	reportError(err)
 	return newSocket(connector)
 }
@@ -98,7 +98,7 @@ func (socket *Socket) checkForSegmentTimeout() {
 	for {
 		select {
 		case <-time.After(timeoutCheckInterval):
-			
+
 		}
 	}
 }
