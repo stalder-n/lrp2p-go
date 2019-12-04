@@ -13,7 +13,7 @@ type queue struct {
 
 func newQueue() *queue {
 	q := &queue{}
-	q.list = &list.List{}
+	q.list = list.New()
 	q.list.Init()
 
 	return q
@@ -91,8 +91,14 @@ func (q *queue) SearchBy(comparator func(interface{}) bool) *list.List {
 }
 
 type concurrencyQueue struct {
-	queue
+	*queue
 	mutex sync.RWMutex
+}
+
+func newConcurrencyQueue() *concurrencyQueue {
+	queue := &concurrencyQueue{}
+	queue.queue = newQueue()
+	return queue
 }
 
 func (q *concurrencyQueue) Enqueue(value interface{}) {

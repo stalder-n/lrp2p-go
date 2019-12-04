@@ -30,11 +30,11 @@ func (suite *UdpConnectorTestSuite) TearDownTest() {
 func (suite *UdpConnectorTestSuite) TestUdpConnector_SimpleGreeting() {
 	timestamp := time.Now()
 	status, n, err := suite.alphaConnection.Write([]byte("Hello beta"), timestamp)
-	suite.Equal(Success, status)
+	suite.Equal(success, status)
 	suite.Equal(10, n)
 	suite.Equal(nil, err)
 	status, n, err = suite.betaConnection.Write([]byte("Hello alpha"), timestamp)
-	suite.Equal(Success, status)
+	suite.Equal(success, status)
 	suite.Equal(11, n)
 	suite.Equal(nil, err)
 }

@@ -111,6 +111,7 @@ func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 	suite.Nil(err)
 }
 
+// TODO: Broken due to missing window adjustments
 func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	segmentMtu = headerLength + 4
 	suite.alphaArq.windowSize = 8

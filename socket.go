@@ -15,12 +15,15 @@ type Socket struct {
 func NewSocket(address string, senderPort, receiverPort int) *Socket {
 	connector, err := newUdpConnector(address, senderPort, receiverPort)
 	reportError(err)
-	return newSocket(connector, address, senderPort, receiverPort)
+	return newSocket(connector)
 }
 
-func newSocket(connector Connector, remoteHost string, remotePort, localPort int) *Socket {
-	socket := &Socket{connection: connect(connector)}
-	socket.dataAvailable = sync.NewCond(&sync.Mutex{})
+func newSocket(connector Connector) *Socket {
+	socket := &Socket{
+		connection:    connect(connector),
+		readQueue:     *newConcurrencyQueue(),
+		dataAvailable: sync.NewCond(&sync.Mutex{}),
+	}
 	return socket
 }
 
@@ -47,7 +50,10 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 	retryTimeout := 10 * time.Millisecond
 	statusCode, n, err := socket.connection.Write(buffer, time.Now())
 	sumN := n
-
+	if !socket.isReading {
+		go socket.read()
+		socket.isReading = true
+	}
 	for statusCode != success {
 		if err != nil {
 			return sumN, err
@@ -78,7 +84,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	}
 	p := socket.readQueue.Dequeue().(*payload)
 	socket.dataAvailable.L.Unlock()
-	copy(buffer, p.data)
+	copy(buffer, p.data[:p.n])
 	return p.n, p.err
 }
 
@@ -93,6 +99,15 @@ func (socket *Socket) read() {
 			socket.dataAvailable.Signal()
 		case ackReceived:
 		case invalidNonce:
+		}
+	}
+}
+
+func (socket *Socket) checkForSegmentTimeout() {
+	for {
+		select {
+		case <-time.After(timeoutCheckInterval):
+
 		}
 	}
 }

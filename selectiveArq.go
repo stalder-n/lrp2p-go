@@ -22,8 +22,8 @@ func newSelectiveArq(initialSequenceNumber uint32, extension Connector) *selecti
 	arq := &selectiveArq{
 		extension:               extension,
 		readyToSendSegmentQueue: newQueue(),
-		notAckedSegment:         make([]*segment, windowSize),
-		ackedBitmap:             newEmptyBitmap(windowSize),
+		notAckedSegment:         make([]*segment, 32),
+		ackedBitmap:             newEmptyBitmap(32),
 		currentSequenceNumber:   initialSequenceNumber,
 		windowSize:              windowSize,
 	}
@@ -59,6 +59,7 @@ func (arq *selectiveArq) queueTimedOutSegmentsForWrite(time time.Time) {
 	}
 }
 
+// TODO: Adjust window correctly in this method
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
 	for !arq.readyToSendSegmentQueue.IsEmpty() {
@@ -81,10 +82,9 @@ func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, 
 	newSegmentQueue := createSegments(buffer, arq.getAndIncrementCurrentSequenceNumber)
 
 	oldWindow := arq.window
-	for !newSegmentQueue.IsEmpty() && arq.window < arq.windowSize {
+	for !newSegmentQueue.IsEmpty() {
 		ele := newSegmentQueue.Dequeue()
 		arq.readyToSendSegmentQueue.Enqueue(ele)
-		arq.window++
 	}
 
 	arq.queueTimedOutSegmentsForWrite(timestamp)

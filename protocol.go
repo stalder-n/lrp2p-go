@@ -35,8 +35,8 @@ type Connector interface {
 }
 
 func connect(connector Connector) Connector {
-	sec := newSecurityExtension(connector, nil, nil)
-	arq := newSelectiveArq(generateRandomSequenceNumber(), sec)
+	//sec := newSecurityExtension(connector, nil, nil)
+	arq := newSelectiveArq(generateRandomSequenceNumber(), connector)
 	return arq
 }
 

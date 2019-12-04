@@ -33,6 +33,9 @@ func bitmapDiff(bitmap uint32) (uint32, uint32) {
 }
 
 func (m *bitmap) Add(sequenceNumber uint32, data *segment) {
+	if sequenceNumber < m.sequenceNumber {
+		return
+	}
 	if m.sequenceNumber == 0 {
 		m.sequenceNumber = sequenceNumber
 	}
