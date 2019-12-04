@@ -57,14 +57,6 @@ func (m *bitmap) slideOne() {
 	m.bitmapData[len(m.bitmapData)-1] = 0
 }
 
-func (m *bitmap) Get(index int) (bit uint32, data *segment) {
-	bit = m.bitmapData[index]
-	if m.data != nil {
-		data = m.data[index]
-	}
-	return
-}
-
 func (m *bitmap) ToNumber() uint32 {
 	var result uint32
 	for i := 0; i < len(m.bitmapData); i++ {
