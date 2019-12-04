@@ -33,15 +33,6 @@ type payload struct {
 	data []byte
 }
 
-func (socket *Socket) Open() error {
-	err := socket.connection.Open()
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
 func (socket *Socket) Close() error {
 	return socket.connection.Close()
 }
