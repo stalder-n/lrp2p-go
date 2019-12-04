@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+// TODO: sequence diagram
+// TODO: slow start, congestion control
 type selectiveArq struct {
 	extension Connector
 	//receiver
