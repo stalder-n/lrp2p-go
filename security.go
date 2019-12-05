@@ -8,24 +8,26 @@ import (
 )
 
 type securityExtension struct {
-	connector  Connector
-	strategy   handshakeStrategy
-	handshake  *noise.HandshakeState
-	encrypter  *noise.CipherState
-	decrypter  *noise.CipherState
-	key        *noise.DHKey
-	peerKey    []byte
-	writeNonce uint64
-	usedNonces map[uint64]uint8
+	connector    Connector
+	strategy     handshakeStrategy
+	handshake    *noise.HandshakeState
+	encrypter    *noise.CipherState
+	decrypter    *noise.CipherState
+	key          *noise.DHKey
+	peerKey      []byte
+	writeNonce   uint64
+	usedNonces   map[uint64]uint8
+	errorChannel chan error
 }
 
-func newSecurityExtension(connector Connector, key *noise.DHKey, peerKey []byte) *securityExtension {
+func newSecurityExtension(connector Connector, key *noise.DHKey, peerKey []byte, errors chan error) *securityExtension {
 	newSec := &securityExtension{
-		connector:  connector,
-		writeNonce: 0,
-		key:        key,
-		peerKey:    peerKey,
-		usedNonces: make(map[uint64]uint8),
+		connector:    connector,
+		writeNonce:   0,
+		key:          key,
+		peerKey:      peerKey,
+		usedNonces:   make(map[uint64]uint8),
+		errorChannel: errors,
 	}
 	return newSec
 }
@@ -81,6 +83,12 @@ func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCo
 
 func (sec *securityExtension) SetReadTimeout(t time.Duration) {
 	sec.connector.SetReadTimeout(t)
+}
+
+func (sec *securityExtension) reportError(err error) {
+	if err != nil {
+		sec.errorChannel <- err
+	}
 }
 
 // Checks if the received nonce has been used before and returns an appropriate

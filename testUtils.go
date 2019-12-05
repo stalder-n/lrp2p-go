@@ -14,6 +14,12 @@ type atpTestSuite struct {
 	suite.Suite
 }
 
+var testErrorChannel chan error
+
+func init() {
+	testErrorChannel = make(chan error, 100)
+}
+
 func (suite *atpTestSuite) handleTestError(err error) {
 	if err != nil {
 		suite.Errorf(err, "Error occurred")
@@ -76,6 +82,12 @@ func (printer *consolePrinter) SetReadTimeout(t time.Duration) {
 	printer.extension.SetReadTimeout(t)
 }
 
+func (printer *consolePrinter) reportError(err error) {
+	if err != nil {
+		testErrorChannel <- err
+	}
+}
+
 type segmentManipulator struct {
 	savedSegments map[uint32][]byte
 	toDropOnce    list.List
@@ -111,6 +123,12 @@ func (manipulator *segmentManipulator) Write(buffer []byte, timestamp time.Time)
 
 func (manipulator *segmentManipulator) SetReadTimeout(t time.Duration) {
 	manipulator.extension.SetReadTimeout(t)
+}
+
+func (manipulator *segmentManipulator) reportError(err error) {
+	if err != nil {
+		testErrorChannel <- err
+	}
 }
 
 type channelConnector struct {
@@ -160,4 +178,10 @@ func (connector *channelConnector) SetReadTimeout(t time.Duration) {
 func (connector *channelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
 	artificialTimeout := operationTime.Sub(connector.artificialNow) + timeout
 	return time.After(artificialTimeout)
+}
+
+func (connector *channelConnector) reportError(err error) {
+	if err != nil {
+		testErrorChannel <- err
+	}
 }

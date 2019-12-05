@@ -42,11 +42,11 @@ func (suite *securityTestSuite) mockConnections(peerKeyKnown bool) {
 	alphaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
 	betaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
 	if peerKeyKnown {
-		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, betaKey.Public)
-		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, alphaKey.Public)
+		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, betaKey.Public, testErrorChannel)
+		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, alphaKey.Public, testErrorChannel)
 	} else {
-		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, nil)
-		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, nil)
+		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, nil, testErrorChannel)
+		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, nil, testErrorChannel)
 	}
 }
 

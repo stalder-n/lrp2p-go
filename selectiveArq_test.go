@@ -169,7 +169,7 @@ func TestSelectiveArq(t *testing.T) {
 }
 
 func newMockSelectiveArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
-	arq := newSelectiveArq(1, nil)
+	arq := newSelectiveArq(1, nil, testErrorChannel)
 	printer := &consolePrinter{Name: name}
 	manipulator := &segmentManipulator{}
 

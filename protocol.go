@@ -65,15 +65,16 @@ func reportError(err error) {
 }
 
 type Connector interface {
-	Read(buffer []byte, timestamp time.Time) (statusCode, int, error)
-	Write(buffer []byte, timestamp time.Time) (statusCode, int, error)
+	Read([]byte, time.Time) (statusCode, int, error)
+	Write([]byte, time.Time) (statusCode, int, error)
 	Close() error
 	SetReadTimeout(time.Duration)
+	reportError(error)
 }
 
-func connect(connector Connector) Connector {
-	sec := newSecurityExtension(connector, nil, nil)
-	arq := newSelectiveArq(generateRandomSequenceNumber(), sec)
+func connect(connector Connector, errors chan error) Connector {
+	sec := newSecurityExtension(connector, nil, nil, errors)
+	arq := newSelectiveArq(generateRandomSequenceNumber(), sec, errors)
 	return arq
 }
 
@@ -84,14 +85,15 @@ func handleError(err error) {
 }
 
 type udpConnector struct {
-	udpSender   *net.UDPConn
-	udpReceiver *net.UDPConn
-	timeout     time.Duration
+	udpSender    *net.UDPConn
+	udpReceiver  *net.UDPConn
+	timeout      time.Duration
+	errorChannel chan error
 }
 
 const timeoutErrorString = "i/o timeout"
 
-func newUDPConnector(remoteHostname string, remotePort, localPort int) (*udpConnector, error) {
+func newUDPConnector(remoteHostname string, remotePort, localPort int, errorChannel chan error) (*udpConnector, error) {
 	remoteAddress := createUDPAddress(remoteHostname, remotePort)
 	localAddress := createUDPAddress("localhost", localPort)
 
@@ -105,9 +107,10 @@ func newUDPConnector(remoteHostname string, remotePort, localPort int) (*udpConn
 	}
 
 	connector := &udpConnector{
-		udpSender:   udpSender,
-		udpReceiver: udpReceiver,
-		timeout:     0,
+		udpSender:    udpSender,
+		udpReceiver:  udpReceiver,
+		timeout:      0,
+		errorChannel: errorChannel,
 	}
 
 	return connector, nil
@@ -160,32 +163,46 @@ func (connector *udpConnector) SetReadTimeout(t time.Duration) {
 	connector.timeout = t
 }
 
-type Socket struct {
-	connection    Connector
-	readQueue     concurrencyQueue
-	dataAvailable *sync.Cond
-	isReading     bool
-}
-
-func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
-	connector, err := newUDPConnector(remoteHost, remotePort, localPort)
-	reportError(err)
-	return newSocket(connector)
-}
-
-func newSocket(connector Connector) *Socket {
-	socket := &Socket{
-		connection:    connect(connector),
-		readQueue:     *newConcurrencyQueue(),
-		dataAvailable: sync.NewCond(&sync.Mutex{}),
+func (connector *udpConnector) reportError(err error) {
+	if err != nil {
+		connector.errorChannel <- err
 	}
-	return socket
 }
 
 type payload struct {
 	n    int
 	err  error
 	data []byte
+}
+
+type Socket struct {
+	connection    Connector
+	readQueue     concurrencyQueue
+	dataAvailable *sync.Cond
+	isReading     bool
+	errorChannel  chan error
+}
+
+func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
+	errorChannel := make(chan error, 100)
+	connector, err := newUDPConnector(remoteHost, remotePort, localPort, errorChannel)
+	reportError(err)
+	return newSocket(connector, errorChannel)
+}
+
+func newSocket(connector Connector, errorChannel chan error) *Socket {
+	socket := &Socket{
+		connection:    connect(connector, errorChannel),
+		readQueue:     *newConcurrencyQueue(),
+		dataAvailable: sync.NewCond(&sync.Mutex{}),
+		errorChannel:  errorChannel,
+	}
+
+	return socket
+}
+
+func (socket *Socket) ErrorChannel() chan error {
+	return socket.errorChannel
 }
 
 func (socket *Socket) Close() error {
@@ -254,7 +271,8 @@ func (socket *Socket) checkForSegmentTimeout() {
 	for {
 		select {
 		case <-time.After(timeoutCheckInterval):
-
+			_, _, err := socket.connection.Write(nil, time.Now())
+			reportError(err)
 		}
 	}
 }

@@ -13,9 +13,9 @@ type udpConnectorTestSuite struct {
 }
 
 func (suite *udpConnectorTestSuite) SetupTest() {
-	alphaConnection, err := newUDPConnector("localhost", 3031, 3030)
+	alphaConnection, err := newUDPConnector("localhost", 3031, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnection, err := newUDPConnector("localhost", 3030, 3031)
+	betaConnection, err := newUDPConnector("localhost", 3030, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	suite.alphaConnection = alphaConnection
 	suite.betaConnection = betaConnection

@@ -17,9 +17,10 @@ type selectiveArq struct {
 	currentSequenceNumber   uint32
 	window                  uint32
 	windowSize              uint32
+	errorChannel            chan error
 }
 
-func newSelectiveArq(initialSequenceNumber uint32, extension Connector) *selectiveArq {
+func newSelectiveArq(initialSequenceNumber uint32, extension Connector, errors chan error) *selectiveArq {
 	var windowSize uint32 = 20
 	arq := &selectiveArq{
 		extension:               extension,
@@ -28,6 +29,7 @@ func newSelectiveArq(initialSequenceNumber uint32, extension Connector) *selecti
 		ackedBitmap:             newEmptyBitmap(32),
 		currentSequenceNumber:   initialSequenceNumber,
 		windowSize:              windowSize,
+		errorChannel:            errors,
 	}
 	return arq
 }
@@ -133,6 +135,12 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 
 func (arq *selectiveArq) SetReadTimeout(t time.Duration) {
 	arq.extension.SetReadTimeout(t)
+}
+
+func (arq *selectiveArq) reportError(err error) {
+	if err != nil {
+		arq.errorChannel <- err
+	}
 }
 
 func (arq *selectiveArq) handleAck(seg *segment, timestamp time.Time) {
