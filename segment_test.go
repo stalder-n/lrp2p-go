@@ -6,7 +6,7 @@ import (
 )
 
 type segmentSuite struct {
-	suite.Suite
+	atpTestSuite
 }
 
 func (suite *segmentSuite) TestCreateSegment() {
@@ -41,7 +41,6 @@ func (suite *segmentSuite) TestGetExpectedSequenceNumber() {
 
 func (suite *segmentSuite) Test_uint32ToBytes() {
 	test := uint32ToBytes(0)
-
 	suite.Equal(4, len(test))
 }
 

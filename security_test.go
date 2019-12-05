@@ -9,23 +9,23 @@ import (
 	"time"
 )
 
-type SecurityTestSuite struct {
-	suite.Suite
+type securityTestSuite struct {
+	atpTestSuite
 	alphaSecurity, betaSecurity   *securityExtension
 	alphaConnector, betaConnector *channelConnector
 }
 
-func (suite *SecurityTestSuite) SetupTest() {
+func (suite *securityTestSuite) SetupTest() {
 	segmentMtu = 128
 }
 
-func (suite *SecurityTestSuite) TearDownTest() {
+func (suite *securityTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaSecurity.Close())
 	suite.handleTestError(suite.betaSecurity.Close())
 	segmentMtu = defaultMTU
 }
 
-func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
+func (suite *securityTestSuite) mockConnections(peerKeyKnown bool) {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	startTime := time.Now()
 	suite.alphaConnector, suite.betaConnector = &channelConnector{
@@ -50,7 +50,7 @@ func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	}
 }
 
-func (suite *SecurityTestSuite) exchangeGreeting() {
+func (suite *securityTestSuite) exchangeGreeting() {
 	expected := "Hello, World!"
 	group := sync.WaitGroup{}
 	group.Add(2)
@@ -71,21 +71,16 @@ func (suite *SecurityTestSuite) exchangeGreeting() {
 	group.Wait()
 }
 
-func (suite *SecurityTestSuite) handleTestError(err error) {
-	if err != nil {
-		suite.Errorf(err, "Error occurred")
-	}
-}
-func (suite *SecurityTestSuite) TestExchangeGreeting() {
+func (suite *securityTestSuite) TestExchangeGreeting() {
 	suite.mockConnections(false)
 	suite.exchangeGreeting()
 }
 
-func (suite *SecurityTestSuite) TestExchangeGreetingWithKnownPeerKey() {
+func (suite *securityTestSuite) TestExchangeGreetingWithKnownPeerKey() {
 	suite.mockConnections(true)
 	suite.exchangeGreeting()
 }
 
 func TestSecurityExtension(t *testing.T) {
-	suite.Run(t, new(SecurityTestSuite))
+	suite.Run(t, new(securityTestSuite))
 }

@@ -6,29 +6,12 @@ import (
 	"time"
 )
 
-func newMockSelectiveArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
-	arq := newSelectiveArq(1, nil)
-	printer := &consolePrinter{Name: name}
-	manipulator := &segmentManipulator{}
-
-	arq.addExtension(manipulator)
-	manipulator.AddExtension(printer)
-	printer.AddExtension(connector)
-
-	return arq, manipulator
-}
-
 type SelectiveArqTestSuite struct {
-	suite.Suite
+	atpTestSuite
 	alphaArq, betaArq                 *selectiveArq
 	alphaManipulator, betaManipulator *segmentManipulator
 }
 
-func (suite *SelectiveArqTestSuite) handleTestError(err error) {
-	if err != nil {
-		suite.Errorf(err, "Error occurred")
-	}
-}
 func (suite *SelectiveArqTestSuite) SetupTest() {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	connector1, connector2 := &channelConnector{
@@ -44,6 +27,7 @@ func (suite *SelectiveArqTestSuite) SetupTest() {
 	suite.handleTestError(suite.alphaArq.Open())
 	suite.handleTestError(suite.betaArq.Open())
 }
+
 func (suite *SelectiveArqTestSuite) TearDownTest() {
 	segmentMtu = defaultMTU
 	suite.handleTestError(suite.alphaArq.Close())
@@ -96,6 +80,7 @@ func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 		i++
 	}
 }
+
 func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 
 	currentTime := time.Now()
@@ -184,4 +169,16 @@ func (suite *SelectiveArqTestSuite) TestRetransmission() {
 
 func TestSelectiveArq(t *testing.T) {
 	suite.Run(t, new(SelectiveArqTestSuite))
+}
+
+func newMockSelectiveArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
+	arq := newSelectiveArq(1, nil)
+	printer := &consolePrinter{Name: name}
+	manipulator := &segmentManipulator{}
+
+	arq.addExtension(manipulator)
+	manipulator.AddExtension(printer)
+	printer.AddExtension(connector)
+
+	return arq, manipulator
 }

@@ -5,11 +5,20 @@ import (
 	"container/list"
 	"flag"
 	"fmt"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"reflect"
-	"testing"
 	"time"
 )
+
+type atpTestSuite struct {
+	suite.Suite
+}
+
+func (suite *atpTestSuite) handleTestError(err error) {
+	if err != nil {
+		suite.Errorf(err, "Error occurred")
+	}
+}
 
 var flagVerbose = flag.Bool("v", false, "show more detailed console output")
 
@@ -167,10 +176,4 @@ func (connector *channelConnector) SetReadTimeout(t time.Duration) {
 func (connector *channelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
 	artificialTimeout := operationTime.Sub(connector.artificialNow) + timeout
 	return time.After(artificialTimeout)
-}
-
-func handleTestError(t *testing.T, err error) {
-	if err != nil {
-		assert.Errorf(t, err, "Error occurred")
-	}
 }
