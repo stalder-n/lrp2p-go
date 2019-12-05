@@ -13,8 +13,9 @@ const (
 	flagACK byte = 1
 	flagSYN byte = 2
 )
+
 const (
-	defaultMTU   = 128
+	defaultMTU   = 1024
 	headerLength = 6
 )
 
