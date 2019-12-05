@@ -84,18 +84,21 @@ func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, i
 	return success, sumN, nil
 }
 
-func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+func (arq *selectiveArq) queueNewSegments(buffer []byte) {
+	if len(buffer) == 0 {
+		return
+	}
 	newSegmentQueue := createSegments(buffer, arq.getAndIncrementCurrentSequenceNumber)
-
 	for !newSegmentQueue.IsEmpty() {
 		segment := newSegmentQueue.Dequeue()
 		arq.readyToSendSegmentQueue.Enqueue(segment)
 	}
+}
 
+func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	arq.queueNewSegments(buffer)
 	arq.queueTimedOutSegmentsForWrite(timestamp)
-
 	status, n, err := arq.writeQueuedSegments(timestamp)
-
 	return status, n, err
 }
 
@@ -108,16 +111,20 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	seg := createSegment(buf)
 
 	if seg.isFlaggedAs(flagACK) {
-		arq.handleSelectiveAck(seg, timestamp)
+		arq.handleAck(seg, timestamp)
 		copy(buffer, seg.data)
 		return ackReceived, n, err
 	}
 
-	//received data-segment:
-	arq.ackedBitmap.Add(seg.getSequenceNumber(), seg)
+	if seg.getSequenceNumber() < arq.ackedBitmap.sequenceNumber {
+		_, _, err = arq.writeAck(timestamp)
+		return invalidSegment, 0, nil
+	}
 
+	arq.ackedBitmap.Add(seg.getSequenceNumber(), seg)
 	segOrdered := arq.ackedBitmap.GetAndRemoveInorder()
-	_, n, err = arq.writeSelectiveAck(timestamp)
+	
+	_, n, err = arq.writeAck(timestamp)
 	if err != nil {
 		return fail, n, err
 	}
@@ -141,7 +148,7 @@ func clear(b []byte) {
 	}
 }
 
-func (arq *selectiveArq) handleSelectiveAck(seg *segment, timestamp time.Time) {
+func (arq *selectiveArq) handleAck(seg *segment, timestamp time.Time) {
 	arq.removeAckedSegment(seg.data)
 	arq.queueTimedOutSegmentsForWrite(timestamp)
 	_, _, err := arq.writeQueuedSegments(timestamp)
@@ -168,7 +175,7 @@ func (arq *selectiveArq) removeAckedSegment(data []byte) {
 	}
 }
 
-func (arq *selectiveArq) writeSelectiveAck(timestamp time.Time) (statusCode, int, error) {
-	ack := createSelectiveAckSegment(arq.getAndIncrementCurrentSequenceNumber(), arq.ackedBitmap)
+func (arq *selectiveArq) writeAck(timestamp time.Time) (statusCode, int, error) {
+	ack := createAckSegment(arq.getAndIncrementCurrentSequenceNumber(), arq.ackedBitmap)
 	return arq.extension.Write(ack.buffer, timestamp)
 }

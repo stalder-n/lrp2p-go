@@ -7,7 +7,7 @@ const (
 	flagSYN byte = 2
 )
 const (
-	defaultMTU   = 64
+	defaultMTU   = 128
 	headerLength = 6
 )
 

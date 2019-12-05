@@ -90,6 +90,7 @@ func (socket *Socket) read() {
 			socket.dataAvailable.Signal()
 		case ackReceived:
 		case invalidNonce:
+		case invalidSegment:
 		}
 	}
 }

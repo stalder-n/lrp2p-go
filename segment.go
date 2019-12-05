@@ -95,18 +95,10 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segme
 	return createSegment(buffer)
 }
 
-func createAckSegment(sequenceNumber uint32, receivedSequenceNumber uint32) *segment {
-	receivedSequenceNumberBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(receivedSequenceNumberBytes, receivedSequenceNumber)
-	return createFlaggedSegment(sequenceNumber, flagACK, receivedSequenceNumberBytes)
-}
-
-func createSelectiveAckSegment(sequenceNumber uint32, bitmap *bitmap) *segment {
+func createAckSegment(sequenceNumber uint32, bitmap *bitmap) *segment {
 	first := uint32ToBytes(bitmap.sequenceNumber)
 	second := uint32ToBytes(bitmap.ToNumber())
-
 	data := append(first, second...)
-
 	return createFlaggedSegment(sequenceNumber, flagACK, data)
 }
 
@@ -116,9 +108,9 @@ func createSegments(buffer []byte, seqNumFactory func() uint32) *queue {
 	var seg *segment
 	currentIndex := 0
 	for {
-		currentIndex, seg = peekFlaggedSegmentOfBuffer(currentIndex, seqNumFactory(), buffer)
+		currentIndex, seg = getNextSegmentInBuffer(currentIndex, seqNumFactory(), buffer)
 		result.Enqueue(seg)
-		if currentIndex == len(buffer) {
+		if currentIndex >= len(buffer) {
 			break
 		}
 	}
@@ -126,7 +118,7 @@ func createSegments(buffer []byte, seqNumFactory func() uint32) *queue {
 	return result
 }
 
-func peekFlaggedSegmentOfBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
+func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
 	var next = currentIndex + getDataChunkSize()
 	var flag byte = 0
 	if currentIndex == 0 {

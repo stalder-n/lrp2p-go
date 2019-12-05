@@ -9,17 +9,6 @@ type segmentSuite struct {
 	suite.Suite
 }
 
-func (suite *segmentSuite) TestCreateAckSegment() {
-	a := createAckSegment(1, 2)
-	suite.NotEqual("", a.getDataAsString())
-	suite.NotNil(a.data)
-	suite.NotEqual(0, len(a.data))
-	suite.ElementsMatch([]byte{0, 0, 0, 2}, a.data)
-	suite.NotNil(a.sequenceNumber)
-	suite.ElementsMatch([]byte{0, 0, 0, 1}, a.sequenceNumber)
-	suite.Equal(uint32(2), a.getExpectedSequenceNumber())
-}
-
 func (suite *segmentSuite) TestCreateSegment() {
 	buffer := []byte{6, 0, 0, 0, 0, 1, 'T', 'E', 'S', 'T'}
 	b := createSegment(buffer)
