@@ -116,7 +116,7 @@ func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	segmentMtu = headerLength + 4
 	suite.alphaArq.windowSize = 8
 
-	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	message := "AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIII"
 	writeBuffer := []byte(message)
 
 	status, _, err := suite.alphaArq.Write(writeBuffer, time.Now())

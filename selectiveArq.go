@@ -65,9 +65,13 @@ func (arq *selectiveArq) queueTimedOutSegmentsForWrite(time time.Time) {
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
 	for !arq.readyToSendSegmentQueue.IsEmpty() {
+		if arq.window >= arq.windowSize {
+			return windowFull, sumN, nil
+		}
 		seg := arq.readyToSendSegmentQueue.Dequeue().(*segment)
 		_, n, err := arq.extension.Write(seg.buffer, timestamp)
 		seg.timestamp = time.Now()
+		arq.window++
 
 		if err != nil {
 			return fail, n, err
@@ -83,21 +87,16 @@ func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, i
 func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	newSegmentQueue := createSegments(buffer, arq.getAndIncrementCurrentSequenceNumber)
 
-	oldWindow := arq.window
 	for !newSegmentQueue.IsEmpty() {
-		ele := newSegmentQueue.Dequeue()
-		arq.readyToSendSegmentQueue.Enqueue(ele)
+		segment := newSegmentQueue.Dequeue()
+		arq.readyToSendSegmentQueue.Enqueue(segment)
 	}
 
 	arq.queueTimedOutSegmentsForWrite(timestamp)
 
-	status, _, err := arq.writeQueuedSegments(timestamp)
+	status, n, err := arq.writeQueuedSegments(timestamp)
 
-	if arq.window == arq.windowSize {
-		return windowFull, int(arq.window - oldWindow), nil
-	}
-
-	return status, int(arq.window - oldWindow), err
+	return status, n, err
 }
 
 func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
