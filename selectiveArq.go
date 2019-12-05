@@ -112,7 +112,6 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 
 	if seg.isFlaggedAs(flagACK) {
 		arq.handleAck(seg, timestamp)
-		copy(buffer, seg.data)
 		return ackReceived, n, err
 	}
 
@@ -123,7 +122,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 
 	arq.ackedBitmap.Add(seg.getSequenceNumber(), seg)
 	segOrdered := arq.ackedBitmap.GetAndRemoveInorder()
-	
+
 	_, n, err = arq.writeAck(timestamp)
 	if err != nil {
 		return fail, n, err
@@ -133,19 +132,12 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 		copy(buffer, segOrdered.data)
 		return status, len(segOrdered.data), err
 	} else {
-		clear(buffer)
-		return status, 0, err
+		return invalidSegment, 0, err
 	}
 }
 
 func (arq *selectiveArq) SetReadTimeout(t time.Duration) {
 	arq.extension.SetReadTimeout(t)
-}
-
-func clear(b []byte) {
-	for k := range b {
-		b[k] = 0
-	}
 }
 
 func (arq *selectiveArq) handleAck(seg *segment, timestamp time.Time) {

@@ -51,23 +51,32 @@ func (suite *SelectiveArqTestSuite) TearDownTest() {
 }
 
 func (suite *SelectiveArqTestSuite) write(c Connector, data []byte, time time.Time) {
+	suite.writeExpectStatus(c, data, success, time)
+}
+
+func (suite *SelectiveArqTestSuite) writeExpectStatus(c Connector, data []byte, code statusCode, time time.Time) {
 	status, _, err := c.Write(data, time)
 	suite.handleTestError(err)
-	suite.Equal(success, status)
+	suite.Equal(code, status)
 }
-func (suite *SelectiveArqTestSuite) read(c Connector, expected string, readBuffer []byte, time time.Time) {
+
+func (suite *SelectiveArqTestSuite) read(c Connector, expected string, time time.Time) {
+	readBuffer := make([]byte, segmentMtu)
 	status, n, err := c.Read(readBuffer, time)
 	suite.handleTestError(err)
 	suite.Equal(expected, string(readBuffer[:n]))
 	suite.Equal(success, status)
 }
-func (suite *SelectiveArqTestSuite) readExpectStatus(c Connector, expected statusCode, readBuffer []byte, time time.Time) {
+
+func (suite *SelectiveArqTestSuite) readExpectStatus(c Connector, expected statusCode, time time.Time) {
+	readBuffer := make([]byte, segmentMtu)
 	status, _, err := c.Read(readBuffer, time)
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
 }
-func (suite *SelectiveArqTestSuite) readAck(c Connector, readBuffer []byte, time time.Time) {
-	suite.readExpectStatus(c, ackReceived, readBuffer, time)
+
+func (suite *SelectiveArqTestSuite) readAck(c Connector, time time.Time) {
+	suite.readExpectStatus(c, ackReceived, time)
 }
 
 func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
@@ -111,18 +120,12 @@ func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 	suite.Nil(err)
 }
 
-// TODO: Broken due to missing window adjustments
 func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	segmentMtu = headerLength + 4
 	suite.alphaArq.windowSize = 8
 
 	message := "AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIII"
-	writeBuffer := []byte(message)
-
-	status, _, err := suite.alphaArq.Write(writeBuffer, time.Now())
-
-	suite.handleTestError(err)
-	suite.Equal(windowFull, status)
+	suite.writeExpectStatus(suite.alphaArq, []byte(message), windowFull, time.Now())
 }
 
 func (suite *SelectiveArqTestSuite) TestSendingACKs() {
@@ -131,31 +134,19 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	suite.betaArq.windowSize = 8
 
 	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
-	writeBuffer := []byte(message)
-	readBuffer := make([]byte, segmentMtu)
+	timestamp := time.Now()
 
-	time := time.Now()
+	suite.write(suite.alphaArq, []byte(message), timestamp)
 
-	suite.alphaArq.Write(writeBuffer, time)
+	suite.read(suite.betaArq, message[:8], timestamp)
+	suite.read(suite.betaArq, message[8:16], timestamp)
+	suite.read(suite.betaArq, message[16:24], timestamp)
+	suite.read(suite.betaArq, message[24:32], timestamp)
 
-	suite.betaArq.Read(readBuffer, time)
-	suite.betaArq.Read(readBuffer, time)
-	suite.betaArq.Read(readBuffer, time)
-	suite.betaArq.Read(readBuffer, time)
-
-	suite.alphaArq.Read(readBuffer, time)
-
-	//bitmap should be empty and leave only the expected seqNr
-	suite.Equal(uint32(2), bytesToUint32(readBuffer))
-
-	suite.alphaArq.Read(readBuffer, time)
-	suite.Equal(uint32(3), bytesToUint32(readBuffer))
-
-	suite.alphaArq.Read(readBuffer, time)
-	suite.Equal(uint32(4), bytesToUint32(readBuffer))
-
-	suite.alphaArq.Read(readBuffer, time)
-	suite.Equal(uint32(5), bytesToUint32(readBuffer))
+	suite.readAck(suite.alphaArq, timestamp)
+	suite.readAck(suite.alphaArq, timestamp)
+	suite.readAck(suite.alphaArq, timestamp)
+	suite.readAck(suite.alphaArq, timestamp)
 }
 
 func (suite *SelectiveArqTestSuite) TestRetransmission() {
@@ -169,7 +160,6 @@ func (suite *SelectiveArqTestSuite) TestRetransmission() {
 
 	message := "ABCD1234EFGH5678IJKL9012MNOP3456"
 	writeBuffer := []byte(message)
-	readBuffer := make([]byte, segmentMtu)
 
 	now := time.Now()
 	timestamp := func() time.Time {
@@ -177,19 +167,19 @@ func (suite *SelectiveArqTestSuite) TestRetransmission() {
 		return now
 	}
 
-	suite.alphaArq.Write(writeBuffer, timestamp())
+	suite.write(suite.alphaArq, writeBuffer, timestamp())
 
-	suite.read(suite.betaArq, "ABCD1234", readBuffer, timestamp())
-	suite.read(suite.betaArq, "", readBuffer, timestamp())
+	suite.read(suite.betaArq, "ABCD1234", timestamp())
+	suite.readExpectStatus(suite.betaArq, invalidSegment, timestamp())
 
-	suite.readAck(suite.alphaArq, readBuffer, timestamp())
-	suite.readAck(suite.alphaArq, readBuffer, timestamp())
+	suite.readAck(suite.alphaArq, timestamp())
+	suite.readAck(suite.alphaArq, timestamp())
 
-	suite.read(suite.betaArq, "", readBuffer, timestamp())
-	suite.read(suite.betaArq, "EFGH5678", readBuffer, timestamp())
+	suite.readExpectStatus(suite.betaArq, invalidSegment, timestamp())
+	suite.read(suite.betaArq, "EFGH5678", timestamp())
 
-	suite.readAck(suite.alphaArq, readBuffer, timestamp())
-	suite.readAck(suite.alphaArq, readBuffer, timestamp())
+	suite.readAck(suite.alphaArq, timestamp())
+	suite.readAck(suite.alphaArq, timestamp())
 }
 
 func TestSelectiveArq(t *testing.T) {
