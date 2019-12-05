@@ -57,15 +57,6 @@ var generateRandomSequenceNumber = func() uint32 {
 	return sequenceNum
 }
 
-func hasSegmentTimedOut(seg *segment, time time.Time) bool {
-	if seg == nil {
-		return false
-	}
-
-	timeout := seg.timestamp.Add(retransmissionTimeout)
-	return time.After(timeout)
-}
-
 type Connector interface {
 	Read(buffer []byte, timestamp time.Time) (statusCode, int, error)
 	Write(buffer []byte, timestamp time.Time) (statusCode, int, error)
