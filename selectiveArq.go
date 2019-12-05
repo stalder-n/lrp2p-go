@@ -57,7 +57,6 @@ func (arq *selectiveArq) queueTimedOutSegmentsForWrite(time time.Time) {
 	}
 }
 
-// TODO: Adjust window correctly in this method
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
 	for !arq.readyToSendSegmentQueue.IsEmpty() {
