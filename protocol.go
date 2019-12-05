@@ -58,6 +58,12 @@ var generateRandomSequenceNumber = func() uint32 {
 	return sequenceNum
 }
 
+func reportError(err error) {
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 type Connector interface {
 	Read(buffer []byte, timestamp time.Time) (statusCode, int, error)
 	Write(buffer []byte, timestamp time.Time) (statusCode, int, error)

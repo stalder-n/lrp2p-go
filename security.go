@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"github.com/flynn/noise"
-	"log"
 	"time"
 )
 
@@ -150,12 +149,6 @@ func createHandshakeState(keyRef *noise.DHKey, peerKey []byte, handshakePattern 
 		PeerStatic:    peerKey,
 	})
 	return handshake
-}
-
-func reportError(err error) {
-	if err != nil {
-		log.Println(err)
-	}
 }
 
 type handshakeStrategy interface {
