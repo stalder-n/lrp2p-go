@@ -35,10 +35,6 @@ func (sec *securityExtension) addExtension(extension Connector) {
 	sec.connector = extension
 }
 
-func (sec *securityExtension) Open() error {
-	return sec.connector.Open()
-}
-
 func (sec *securityExtension) Close() error {
 	return sec.connector.Close()
 }

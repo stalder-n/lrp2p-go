@@ -27,14 +27,6 @@ type consolePrinter struct {
 	Name      string
 }
 
-func (printer *consolePrinter) Open() error {
-	err := printer.extension.Open()
-	if *flagVerbose {
-		println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "Open()", "error:", fmt.Sprintf("%+v", err))
-	}
-	return err
-}
-
 func (printer *consolePrinter) Close() error {
 	err := printer.extension.Close()
 	if *flagVerbose {
@@ -94,10 +86,6 @@ func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) 
 	return manipulator.extension.Read(buffer, time.Now())
 }
 
-func (manipulator *segmentManipulator) Open() error {
-	return manipulator.extension.Open()
-}
-
 func (manipulator *segmentManipulator) Close() error {
 	return manipulator.extension.Close()
 }
@@ -130,10 +118,6 @@ type channelConnector struct {
 	out           chan []byte
 	timeout       time.Duration
 	artificialNow time.Time
-}
-
-func (connector *channelConnector) Open() error {
-	return nil
 }
 
 func (connector *channelConnector) Close() error {

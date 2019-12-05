@@ -23,9 +23,6 @@ func (suite *SelectiveArqTestSuite) SetupTest() {
 	}
 	suite.alphaArq, suite.alphaManipulator = newMockSelectiveArqConnection(connector1, "alpha")
 	suite.betaArq, suite.betaManipulator = newMockSelectiveArqConnection(connector2, "beta")
-
-	suite.handleTestError(suite.alphaArq.Open())
-	suite.handleTestError(suite.betaArq.Open())
 }
 
 func (suite *SelectiveArqTestSuite) TearDownTest() {

@@ -38,10 +38,6 @@ func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
 	return result
 }
 
-func (arq *selectiveArq) Open() error {
-	return arq.extension.Open()
-}
-
 func (arq *selectiveArq) Close() error {
 	return arq.extension.Close()
 }

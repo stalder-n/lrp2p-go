@@ -69,7 +69,6 @@ func hasSegmentTimedOut(seg *segment, time time.Time) bool {
 type Connector interface {
 	Read(buffer []byte, timestamp time.Time) (statusCode, int, error)
 	Write(buffer []byte, timestamp time.Time) (statusCode, int, error)
-	Open() error
 	Close() error
 	SetReadTimeout(time.Duration)
 }
@@ -121,10 +120,6 @@ func createUDPAddress(addressString string, port int) *net.UDPAddr {
 	udpAddress, err := net.ResolveUDPAddr("udp4", address)
 	handleError(err)
 	return udpAddress
-}
-
-func (connector *udpConnector) Open() error {
-	return nil
 }
 
 func (connector *udpConnector) Close() error {
