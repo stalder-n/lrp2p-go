@@ -199,5 +199,8 @@ func (arq *selectiveArq) reduceWindow() {
 }
 
 func (arq *selectiveArq) increaseWindow() {
-	arq.window--
+	if arq.window > 0 {
+		arq.window--
+	}
+
 }

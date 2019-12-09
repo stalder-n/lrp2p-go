@@ -166,7 +166,7 @@ func (q *queue) Len() int {
 
 func (q *queue) SearchBy(comparator func(interface{}) bool) *list.List {
 	sl := list.New()
-
+	
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
 		if comparator(ele.Value) {
 			sl.PushBack(ele.Value)
