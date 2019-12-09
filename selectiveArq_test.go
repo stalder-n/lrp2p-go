@@ -12,6 +12,18 @@ type SelectiveArqTestSuite struct {
 	alphaManipulator, betaManipulator *segmentManipulator
 }
 
+func newMockSelectiveArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
+	arq := newSelectiveArq(1, nil, testErrorChannel)
+	printer := &consolePrinter{Name: name}
+	manipulator := &segmentManipulator{}
+
+	arq.addExtension(manipulator)
+	manipulator.AddExtension(printer)
+	printer.AddExtension(connector)
+
+	return arq, manipulator
+}
+
 func (suite *SelectiveArqTestSuite) SetupTest() {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	connector1, connector2 := &channelConnector{
@@ -161,16 +173,4 @@ func (suite *SelectiveArqTestSuite) TestRetransmissionAfterSegmentLoss() {
 
 func TestSelectiveArq(t *testing.T) {
 	suite.Run(t, new(SelectiveArqTestSuite))
-}
-
-func newMockSelectiveArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
-	arq := newSelectiveArq(1, nil, testErrorChannel)
-	printer := &consolePrinter{Name: name}
-	manipulator := &segmentManipulator{}
-
-	arq.addExtension(manipulator)
-	manipulator.AddExtension(printer)
-	printer.AddExtension(connector)
-
-	return arq, manipulator
 }
