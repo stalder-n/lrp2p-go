@@ -60,6 +60,7 @@ func (m *bitmap) Slide() {
 func (m *bitmap) slideOne() {
 	m.sequenceNumber++
 	copy(m.bitmapData, m.bitmapData[1:])
+	copy(m.data, m.data[1:])
 	m.bitmapData[len(m.bitmapData)-1] = 0
 }
 
@@ -126,8 +127,8 @@ func (q *queue) PushFront(value interface{}) {
 	q.list.PushFront(value)
 }
 
-func (q *queue) PushFrontList(values *list.List) {
-	q.list.PushFrontList(values)
+func (q *queue) PushFrontQueue(values *queue) {
+	q.list.PushFrontList(values.list)
 }
 
 func (q *queue) Dequeue() interface{} {
