@@ -1,6 +1,7 @@
 package atp
 
 import (
+	"sync"
 	"time"
 )
 
@@ -8,7 +9,8 @@ import (
 // TODO: slow start, congestion control
 // TODO: mutex for write operations
 type selectiveArq struct {
-	extension Connector
+	extension  Connector
+	writeMutex sync.Mutex
 	//receiver
 	ackedBitmap *bitmap
 
@@ -107,6 +109,9 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 }
 
 func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
+
 	arq.queueNewSegments(buffer)
 	arq.queueTimedOutSegmentsForWrite(timestamp)
 	status, n, err := arq.writeQueuedSegments(timestamp)
@@ -158,6 +163,8 @@ func (arq *selectiveArq) reportError(err error) {
 }
 
 func (arq *selectiveArq) handleAck(seg *segment, timestamp time.Time) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
 	ackedBitmap := newBitmap(arq.windowSize, bytesToUint32(seg.data[:4]), bytesToUint32(seg.data[4:]))
 	arq.removeAckedSegment(ackedBitmap)
 	arq.queueMissingSegmentsForWrite(ackedBitmap, timestamp)

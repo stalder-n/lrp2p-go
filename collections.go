@@ -10,6 +10,7 @@ type bitmap struct {
 	bitmapData     []uint32
 	data           []*segment
 	sequenceNumber uint32
+	mutex          sync.Mutex
 }
 
 func newEmptyBitmap(size uint32) *bitmap {
@@ -39,6 +40,8 @@ func bitmapDiff(bitmap uint32) (uint32, uint32) {
 }
 
 func (m *bitmap) Add(sequenceNumber uint32, data *segment) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if sequenceNumber < m.sequenceNumber {
 		return
 	}
@@ -52,6 +55,8 @@ func (m *bitmap) Add(sequenceNumber uint32, data *segment) {
 }
 
 func (m *bitmap) Slide() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	for m.bitmapData[0] == 1 {
 		m.slideOne()
 	}
@@ -65,6 +70,8 @@ func (m *bitmap) slideOne() {
 }
 
 func (m *bitmap) ToNumber() uint32 {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	var result uint32
 	for i := 0; i < len(m.bitmapData); i++ {
 		bit := m.bitmapData[i]
@@ -75,6 +82,8 @@ func (m *bitmap) ToNumber() uint32 {
 }
 
 func (m *bitmap) GetAndRemoveInorder() *segment {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.bitmapData[0] == 1 {
 		seg := m.data[0]
 		m.slideOne()
