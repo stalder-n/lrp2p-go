@@ -130,11 +130,11 @@ func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte)
 	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
 }
 
-func hasSegmentTimedOut(seg *segment, time time.Time) bool {
+func hasSegmentTimedOut(seg *segment, timestamp time.Time) bool {
 	if seg == nil {
 		return false
 	}
 
 	timeout := seg.timestamp.Add(retransmissionTimeout)
-	return time.After(timeout)
+	return timestamp.After(timeout)
 }

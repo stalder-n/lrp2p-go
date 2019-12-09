@@ -83,7 +83,7 @@ func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, i
 		}
 		seg := arq.readyToSendSegmentQueue.Dequeue().(*segment)
 		_, n, err := arq.extension.Write(seg.buffer, timestamp)
-		seg.timestamp = time.Now()
+		seg.timestamp = timestamp
 		arq.reduceWindow()
 
 		if err != nil {
