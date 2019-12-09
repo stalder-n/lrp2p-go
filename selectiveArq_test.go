@@ -23,6 +23,7 @@ func (suite *SelectiveArqTestSuite) SetupTest() {
 	}
 	suite.alphaArq, suite.alphaManipulator = newMockSelectiveArqConnection(connector1, "alpha")
 	suite.betaArq, suite.betaManipulator = newMockSelectiveArqConnection(connector2, "beta")
+	segmentMtu = headerLength + 8
 }
 
 func (suite *SelectiveArqTestSuite) TearDownTest() {
@@ -79,7 +80,6 @@ func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 }
 
 func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
-
 	currentTime := time.Now()
 
 	seg1 := createFlaggedSegment(1, 0, []byte("test"))
@@ -103,15 +103,13 @@ func (suite *SelectiveArqTestSuite) TestWriteQueuedSegments() {
 }
 
 func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
-	segmentMtu = headerLength + 4
-	suite.alphaArq.windowSize = 8
+	suite.alphaArq.windowSize = 4
 
 	message := "AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIII"
 	suite.writeExpectStatus(suite.alphaArq, []byte(message), windowFull, time.Now())
 }
 
 func (suite *SelectiveArqTestSuite) TestSendingACKs() {
-	segmentMtu = headerLength + 8
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
 
@@ -132,7 +130,6 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 }
 
 func (suite *SelectiveArqTestSuite) TestRetransmissionAfterSegmentLoss() {
-	segmentMtu = headerLength + 8 //ack need 2 * uint32 space
 	suite.alphaArq.windowSize = 8
 	suite.betaArq.windowSize = 8
 
@@ -160,7 +157,6 @@ func (suite *SelectiveArqTestSuite) TestRetransmissionAfterSegmentLoss() {
 
 	suite.readExpectStatus(suite.betaArq, invalidSegment, timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
-
 }
 
 func TestSelectiveArq(t *testing.T) {
