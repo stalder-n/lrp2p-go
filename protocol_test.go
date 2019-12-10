@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-type UdpConnectorTestSuite struct {
+type UDPConnectorTestSuite struct {
 	atpTestSuite
 	alphaConnection *udpConnector
 	betaConnection  *udpConnector
 }
 
-func (suite *UdpConnectorTestSuite) SetupTest() {
+func (suite *UDPConnectorTestSuite) SetupTest() {
 	alphaConnection, err := newUDPConnector("localhost", 3031, 3030, testErrorChannel)
 	suite.handleTestError(err)
 	betaConnection, err := newUDPConnector("localhost", 3030, 3031, testErrorChannel)
@@ -20,14 +20,12 @@ func (suite *UdpConnectorTestSuite) SetupTest() {
 	suite.alphaConnection = alphaConnection
 	suite.betaConnection = betaConnection
 }
-func (suite *UdpConnectorTestSuite) TearDownTest() {
-	err := suite.alphaConnection.Close()
-	suite.handleTestError(err)
-	err = suite.betaConnection.Close()
-	suite.handleTestError(err)
+func (suite *UDPConnectorTestSuite) TearDownTest() {
+	suite.handleTestError(suite.alphaConnection.Close())
+	suite.handleTestError(suite.betaConnection.Close())
 }
 
-func (suite *UdpConnectorTestSuite) TestSimpleGreeting() {
+func (suite *UDPConnectorTestSuite) TestSimpleGreeting() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
@@ -38,5 +36,5 @@ func (suite *UdpConnectorTestSuite) TestSimpleGreeting() {
 }
 
 func TestUdpConnector(t *testing.T) {
-	suite.Run(t, new(UdpConnectorTestSuite))
+	suite.Run(t, new(UDPConnectorTestSuite))
 }

@@ -26,14 +26,15 @@ func (suite *atpTestSuite) handleTestError(err error) {
 	}
 }
 
-func (suite *atpTestSuite) write(c Connector, payload string, timestamp time.Time) {
-	suite.writeExpectStatus(c, payload, success, timestamp)
+func (suite *atpTestSuite) write(c Connector, payload string, timestamp time.Time) int {
+	return suite.writeExpectStatus(c, payload, success, timestamp)
 }
 
-func (suite *atpTestSuite) writeExpectStatus(c Connector, payload string, code statusCode, timestamp time.Time) {
-	status, _, err := c.Write([]byte(payload), timestamp)
+func (suite *atpTestSuite) writeExpectStatus(c Connector, payload string, code statusCode, timestamp time.Time) int {
+	status, n, err := c.Write([]byte(payload), timestamp)
 	suite.handleTestError(err)
 	suite.Equal(code, status)
+	return n
 }
 
 func (suite *atpTestSuite) read(c Connector, expected string, timestamp time.Time) {

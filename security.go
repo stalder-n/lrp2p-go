@@ -69,7 +69,7 @@ func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCo
 	if sec.decrypter == nil {
 		return waitingForHandshake, 0, nil
 	}
-	encrypted := make([]byte, len(buffer))
+	encrypted := make([]byte, segmentMtu)
 	statusCode, n, err := sec.connector.Read(encrypted, timestamp)
 	nonce := binary.BigEndian.Uint64(encrypted[:8])
 	nonceStatus := sec.syncNonces(nonce)

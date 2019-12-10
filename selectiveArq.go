@@ -147,9 +147,8 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	if segOrdered != nil {
 		copy(buffer, segOrdered.data)
 		return status, len(segOrdered.data), nil
-	} else {
-		return invalidSegment, 0, err
 	}
+	return invalidSegment, 0, err
 }
 
 func (arq *selectiveArq) SetReadTimeout(t time.Duration) {
