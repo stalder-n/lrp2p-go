@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-type bitmapTestSuite struct {
+type BitmapTestSuite struct {
 	atpTestSuite
 }
 
-func (suite *bitmapTestSuite) TestAddLinear() {
+func (suite *BitmapTestSuite) TestAddLinear() {
 	b := newEmptyBitmap(3)
 
 	b.Add(1, nil)
@@ -23,7 +23,7 @@ func (suite *bitmapTestSuite) TestAddLinear() {
 
 }
 
-func (suite *bitmapTestSuite) TestMoveTwice() {
+func (suite *BitmapTestSuite) TestMoveTwice() {
 	b := newEmptyBitmap(3)
 
 	b.Add(1, nil)
@@ -38,7 +38,7 @@ func (suite *bitmapTestSuite) TestMoveTwice() {
 
 }
 
-func (suite *bitmapTestSuite) TestAddNonLinear() {
+func (suite *BitmapTestSuite) TestAddNonLinear() {
 	b := newEmptyBitmap(3)
 	b.Add(1, nil)
 	b.Add(3, nil)
@@ -50,7 +50,7 @@ func (suite *bitmapTestSuite) TestAddNonLinear() {
 	suite.Equal(uint32(1), b.sequenceNumber)
 }
 
-func (suite *bitmapTestSuite) TestToNumber() {
+func (suite *BitmapTestSuite) TestToNumber() {
 	b := newEmptyBitmap(3)
 	b.Add(1, nil)
 	b.Add(3, nil)
@@ -58,7 +58,7 @@ func (suite *bitmapTestSuite) TestToNumber() {
 	suite.Equal(uint32(5), b.ToNumber())
 }
 
-func (suite *bitmapTestSuite) TestInit() {
+func (suite *BitmapTestSuite) TestInit() {
 	b := newBitmap(7, 0, 123)
 	suite.Equal(7, len(b.bitmapData))
 	suite.Equal(uint32(1), b.bitmapData[0])
@@ -71,20 +71,20 @@ func (suite *bitmapTestSuite) TestInit() {
 }
 
 func TestBitmap(t *testing.T) {
-	suite.Run(t, new(bitmapTestSuite))
+	suite.Run(t, new(BitmapTestSuite))
 }
 
-type queueTestSuite struct {
+type QueueTestSuite struct {
 	atpTestSuite
 }
 
-func (suite *queueTestSuite) TestEmptyQueue(t *testing.T) {
+func (suite *QueueTestSuite) TestEmptyQueue(t *testing.T) {
 	q := newQueue()
 	suite.Equal(nil, q.Dequeue(), "Empty container value not == nil")
 	suite.True(q.IsEmpty(), "IsEmpty() for empty container != true")
 }
 
-func (suite *queueTestSuite) TestWithMultipleEntries(t *testing.T) {
+func (suite *QueueTestSuite) TestWithMultipleEntries(t *testing.T) {
 	q := newQueue()
 	q.Enqueue(3)
 	q.Enqueue(5)
@@ -96,7 +96,7 @@ func (suite *queueTestSuite) TestWithMultipleEntries(t *testing.T) {
 	suite.Equal(2, q.Dequeue().(int))
 }
 
-func (suite *queueTestSuite) TestPushFront(t *testing.T) {
+func (suite *QueueTestSuite) TestPushFront(t *testing.T) {
 	q := newQueue()
 	q.Enqueue(3)
 	q.PushFront(5)
@@ -106,7 +106,7 @@ func (suite *queueTestSuite) TestPushFront(t *testing.T) {
 	suite.Equal(3, q.Dequeue().(int))
 }
 
-func (suite *queueTestSuite) TestPeekRemovesNothing(t *testing.T) {
+func (suite *QueueTestSuite) TestPeekRemovesNothing(t *testing.T) {
 	q := newQueue()
 	q.Enqueue(3)
 
@@ -115,7 +115,7 @@ func (suite *queueTestSuite) TestPeekRemovesNothing(t *testing.T) {
 	suite.Equal(3, q.Dequeue().(int))
 }
 
-func (suite *queueTestSuite) TestCheckType(t *testing.T) {
+func (suite *QueueTestSuite) TestCheckType(t *testing.T) {
 	q1 := newQueue()
 	q1.Enqueue(segment{sequenceNumber: []byte{0, 0, 0, 1}})
 	test := func() { q1.Enqueue(1) }
@@ -123,5 +123,5 @@ func (suite *queueTestSuite) TestCheckType(t *testing.T) {
 }
 
 func TestQueue(t *testing.T) {
-	suite.Run(t, new(bitmapTestSuite))
+	suite.Run(t, new(BitmapTestSuite))
 }

@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-type segmentSuite struct {
+type SegmentTestSuite struct {
 	atpTestSuite
 }
 
-func (suite *segmentSuite) TestCreateSegment() {
+func (suite *SegmentTestSuite) TestCreateSegment() {
 	buffer := []byte{6, 0, 0, 0, 0, 1, 'T', 'E', 'S', 'T'}
 	b := createSegment(buffer)
 	suite.NotNil(b.sequenceNumber)
@@ -20,7 +20,7 @@ func (suite *segmentSuite) TestCreateSegment() {
 	suite.ElementsMatch([]byte{'T', 'E', 'S', 'T'}, b.data)
 }
 
-func (suite *segmentSuite) TestCreateFlaggedSegment() {
+func (suite *SegmentTestSuite) TestCreateFlaggedSegment() {
 	data := []byte{'T', 'E', 'S', 'T'}
 	c := createFlaggedSegment(100, 123, data)
 	suite.True(c.isFlaggedAs(123))
@@ -33,17 +33,17 @@ func (suite *segmentSuite) TestCreateFlaggedSegment() {
 	suite.Equal(uint32(100), c.getSequenceNumber())
 }
 
-func (suite *segmentSuite) TestGetExpectedSequenceNumber() {
+func (suite *SegmentTestSuite) TestGetExpectedSequenceNumber() {
 	data := []byte{0, 0, 0, 100, 'T', 'E', 'S', 'T'}
 	c := createFlaggedSegment(100, 123, data)
 	suite.Equal(uint32(100), c.getExpectedSequenceNumber())
 }
 
-func (suite *segmentSuite) Test_uint32ToBytes() {
+func (suite *SegmentTestSuite) Test_uint32ToBytes() {
 	test := uint32ToBytes(0)
 	suite.Equal(4, len(test))
 }
 
 func TestSegment(t *testing.T) {
-	suite.Run(t, &segmentSuite{})
+	suite.Run(t, &SegmentTestSuite{})
 }

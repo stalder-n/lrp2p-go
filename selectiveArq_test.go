@@ -44,35 +44,6 @@ func (suite *SelectiveArqTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaArq.Close())
 }
 
-func (suite *SelectiveArqTestSuite) write(c Connector, data []byte, timestamp time.Time) {
-	suite.writeExpectStatus(c, data, success, timestamp)
-}
-
-func (suite *SelectiveArqTestSuite) writeExpectStatus(c Connector, data []byte, code statusCode, timestamp time.Time) {
-	status, _, err := c.Write(data, timestamp)
-	suite.handleTestError(err)
-	suite.Equal(code, status)
-}
-
-func (suite *SelectiveArqTestSuite) read(c Connector, expected string, timestamp time.Time) {
-	readBuffer := make([]byte, segmentMtu)
-	status, n, err := c.Read(readBuffer, timestamp)
-	suite.handleTestError(err)
-	suite.Equal(expected, string(readBuffer[:n]))
-	suite.Equal(success, status)
-}
-
-func (suite *SelectiveArqTestSuite) readExpectStatus(c Connector, expected statusCode, timestamp time.Time) {
-	readBuffer := make([]byte, segmentMtu)
-	status, _, err := c.Read(readBuffer, timestamp)
-	suite.handleTestError(err)
-	suite.Equal(expected, status)
-}
-
-func (suite *SelectiveArqTestSuite) readAck(c Connector, timestamp time.Time) {
-	suite.readExpectStatus(c, ackReceived, timestamp)
-}
-
 func (suite *SelectiveArqTestSuite) TestQueueTimedOutSegmentsForWrite() {
 	currentTime := time.Now()
 
@@ -118,7 +89,7 @@ func (suite *SelectiveArqTestSuite) TestFullWindowFlag() {
 	suite.alphaArq.windowSize = 4
 
 	message := "AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIII"
-	suite.writeExpectStatus(suite.alphaArq, []byte(message), windowFull, time.Now())
+	suite.writeExpectStatus(suite.alphaArq, message, windowFull, time.Now())
 }
 
 func (suite *SelectiveArqTestSuite) TestSendingACKs() {
@@ -128,7 +99,7 @@ func (suite *SelectiveArqTestSuite) TestSendingACKs() {
 	message := "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
 	timestamp := time.Now()
 
-	suite.write(suite.alphaArq, []byte(message), timestamp)
+	suite.write(suite.alphaArq, message, timestamp)
 
 	suite.read(suite.betaArq, message[:8], timestamp)
 	suite.read(suite.betaArq, message[8:16], timestamp)
@@ -149,11 +120,9 @@ func (suite *SelectiveArqTestSuite) TestRetransmissionAfterSegmentLoss() {
 	suite.alphaManipulator.DropOnce(3)
 
 	message := "ABCD1234EFGH5678IJKL9012MNOP3456"
-	writeBuffer := []byte(message)
-
 	timestamp := time.Now()
 
-	suite.write(suite.alphaArq, writeBuffer, timestamp)
+	suite.write(suite.alphaArq, message, timestamp)
 
 	suite.read(suite.betaArq, message[:8], timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
@@ -178,17 +147,16 @@ func (suite *SelectiveArqTestSuite) TestRetransmissionAfterLastSegmentTimeout() 
 	suite.alphaManipulator.DropOnce(3)
 
 	message := "ABCD1234EFGH5678IJKL9012"
-	writeBuffer := []byte(message)
 
 	timestamp := time.Now()
 
-	suite.write(suite.alphaArq, writeBuffer, timestamp)
+	suite.write(suite.alphaArq, message, timestamp)
 	suite.read(suite.betaArq, message[:8], timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
 	suite.read(suite.betaArq, message[8:16], timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
 	timestamp = timestamp.Add(retransmissionTimeout + time.Millisecond)
-	suite.write(suite.alphaArq, nil, timestamp)
+	suite.write(suite.alphaArq, "", timestamp)
 	suite.read(suite.betaArq, message[16:24], timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
 }
@@ -200,18 +168,17 @@ func (suite *SelectiveArqTestSuite) TestRetransmissionAfterLostAck() {
 	suite.betaManipulator.DropOnce(3)
 
 	message := "ABCD1234EFGH5678IJKL9012"
-	writeBuffer := []byte(message)
 
 	timestamp := time.Now()
 
-	suite.write(suite.alphaArq, writeBuffer, timestamp)
+	suite.write(suite.alphaArq, message, timestamp)
 	suite.read(suite.betaArq, message[:8], timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
 	suite.read(suite.betaArq, message[8:16], timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
 	suite.read(suite.betaArq, message[16:24], timestamp)
 	timestamp = timestamp.Add(retransmissionTimeout + time.Millisecond)
-	suite.write(suite.alphaArq, nil, timestamp)
+	suite.write(suite.alphaArq, "", timestamp)
 	suite.readExpectStatus(suite.betaArq, invalidSegment, timestamp)
 	suite.readAck(suite.alphaArq, timestamp)
 }

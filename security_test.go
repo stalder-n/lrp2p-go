@@ -9,23 +9,23 @@ import (
 	"time"
 )
 
-type securityTestSuite struct {
+type SecurityTestSuite struct {
 	atpTestSuite
 	alphaSecurity, betaSecurity   *securityExtension
 	alphaConnector, betaConnector *channelConnector
 }
 
-func (suite *securityTestSuite) SetupTest() {
+func (suite *SecurityTestSuite) SetupTest() {
 	segmentMtu = 128
 }
 
-func (suite *securityTestSuite) TearDownTest() {
+func (suite *SecurityTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaSecurity.Close())
 	suite.handleTestError(suite.betaSecurity.Close())
 	segmentMtu = defaultMTU
 }
 
-func (suite *securityTestSuite) mockConnections(peerKeyKnown bool) {
+func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	startTime := time.Now()
 	suite.alphaConnector, suite.betaConnector = &channelConnector{
@@ -50,37 +50,33 @@ func (suite *securityTestSuite) mockConnections(peerKeyKnown bool) {
 	}
 }
 
-func (suite *securityTestSuite) exchangeGreeting() {
+func (suite *SecurityTestSuite) exchangeGreeting() {
 	expected := "Hello, World!"
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {
-		_, _, _ = suite.alphaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
-		buf := make([]byte, segmentMtu)
-		_, n, _ := suite.alphaSecurity.Read(buf, suite.alphaConnector.artificialNow)
-		suite.Equal(expected, string(buf[:n]))
+		suite.write(suite.alphaSecurity, expected, suite.alphaConnector.artificialNow)
+		suite.read(suite.alphaSecurity, expected, suite.alphaConnector.artificialNow)
 		group.Done()
 	}()
 	go func() {
-		buf := make([]byte, segmentMtu)
-		_, n, _ := suite.betaSecurity.Read(buf, suite.alphaConnector.artificialNow)
-		suite.Equal(expected, string(buf[:n]))
-		_, _, _ = suite.betaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
+		suite.read(suite.betaSecurity, expected, suite.betaConnector.artificialNow)
+		suite.write(suite.betaSecurity, expected, suite.betaConnector.artificialNow)
 		group.Done()
 	}()
 	group.Wait()
 }
 
-func (suite *securityTestSuite) TestExchangeGreeting() {
+func (suite *SecurityTestSuite) TestExchangeGreeting() {
 	suite.mockConnections(false)
 	suite.exchangeGreeting()
 }
 
-func (suite *securityTestSuite) TestExchangeGreetingWithKnownPeerKey() {
+func (suite *SecurityTestSuite) TestExchangeGreetingWithKnownPeerKey() {
 	suite.mockConnections(true)
 	suite.exchangeGreeting()
 }
 
 func TestSecurityExtension(t *testing.T) {
-	suite.Run(t, new(securityTestSuite))
+	suite.Run(t, new(SecurityTestSuite))
 }

@@ -26,6 +26,35 @@ func (suite *atpTestSuite) handleTestError(err error) {
 	}
 }
 
+func (suite *atpTestSuite) write(c Connector, payload string, timestamp time.Time) {
+	suite.writeExpectStatus(c, payload, success, timestamp)
+}
+
+func (suite *atpTestSuite) writeExpectStatus(c Connector, payload string, code statusCode, timestamp time.Time) {
+	status, _, err := c.Write([]byte(payload), timestamp)
+	suite.handleTestError(err)
+	suite.Equal(code, status)
+}
+
+func (suite *atpTestSuite) read(c Connector, expected string, timestamp time.Time) {
+	readBuffer := make([]byte, segmentMtu)
+	status, n, err := c.Read(readBuffer, timestamp)
+	suite.handleTestError(err)
+	suite.Equal(expected, string(readBuffer[:n]))
+	suite.Equal(success, status)
+}
+
+func (suite *atpTestSuite) readExpectStatus(c Connector, expected statusCode, timestamp time.Time) {
+	readBuffer := make([]byte, segmentMtu)
+	status, _, err := c.Read(readBuffer, timestamp)
+	suite.handleTestError(err)
+	suite.Equal(expected, status)
+}
+
+func (suite *atpTestSuite) readAck(c Connector, timestamp time.Time) {
+	suite.readExpectStatus(c, ackReceived, timestamp)
+}
+
 var flagVerbose = flag.Bool("v", false, "show more detailed console output")
 
 type consolePrinter struct {
