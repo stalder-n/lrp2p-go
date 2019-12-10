@@ -27,7 +27,7 @@ func (suite *udpConnectorTestSuite) TearDownTest() {
 	suite.handleTestError(err)
 }
 
-func (suite *udpConnectorTestSuite) TestUdpConnector_SimpleGreeting() {
+func (suite *udpConnectorTestSuite) TestSimpleGreeting() {
 	timestamp := time.Now()
 	status, n, err := suite.alphaConnection.Write([]byte("Hello beta"), timestamp)
 	suite.Equal(success, status)
