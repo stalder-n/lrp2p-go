@@ -8,7 +8,7 @@ import (
 )
 
 type securityExtension struct {
-	connector    Connector
+	connector    connector
 	strategy     handshakeStrategy
 	handshake    *noise.HandshakeState
 	encrypter    *noise.CipherState
@@ -20,7 +20,7 @@ type securityExtension struct {
 	errorChannel chan error
 }
 
-func newSecurityExtension(connector Connector, key *noise.DHKey, peerKey []byte, errors chan error) *securityExtension {
+func newSecurityExtension(connector connector, key *noise.DHKey, peerKey []byte, errors chan error) *securityExtension {
 	newSec := &securityExtension{
 		connector:    connector,
 		writeNonce:   0,
@@ -32,7 +32,7 @@ func newSecurityExtension(connector Connector, key *noise.DHKey, peerKey []byte,
 	return newSec
 }
 
-func (sec *securityExtension) addExtension(extension Connector) {
+func (sec *securityExtension) addExtension(extension connector) {
 	sec.connector = extension
 }
 

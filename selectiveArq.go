@@ -9,7 +9,7 @@ import (
 // TODO: slow start, congestion control
 // TODO: mutex for write operations
 type selectiveArq struct {
-	extension  Connector
+	extension  connector
 	writeMutex sync.Mutex
 	//receiver
 	ackedBitmap *bitmap
@@ -23,7 +23,7 @@ type selectiveArq struct {
 	errorChannel            chan error
 }
 
-func newSelectiveArq(initialSequenceNumber uint32, extension Connector, errors chan error) *selectiveArq {
+func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
 	var windowSize uint32 = 20
 	arq := &selectiveArq{
 		extension:               extension,
@@ -47,7 +47,7 @@ func (arq *selectiveArq) Close() error {
 	return arq.extension.Close()
 }
 
-func (arq *selectiveArq) addExtension(extension Connector) {
+func (arq *selectiveArq) addExtension(extension connector) {
 	arq.extension = extension
 }
 

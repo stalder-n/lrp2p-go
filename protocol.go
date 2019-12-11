@@ -64,7 +64,7 @@ func reportError(err error) {
 	}
 }
 
-type Connector interface {
+type connector interface {
 	Read([]byte, time.Time) (statusCode, int, error)
 	Write([]byte, time.Time) (statusCode, int, error)
 	Close() error
@@ -72,7 +72,7 @@ type Connector interface {
 	reportError(error)
 }
 
-func connect(connector Connector, errors chan error) Connector {
+func connect(connector connector, errors chan error) connector {
 	sec := newSecurityExtension(connector, nil, nil, errors)
 	arq := newSelectiveArq(generateRandomSequenceNumber(), sec, errors)
 	return arq
@@ -134,6 +134,9 @@ func (connector *udpConnector) Close() error {
 
 func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	n, err := connector.udpSender.Write(buffer)
+	if err != nil {
+		return fail, n, err
+	}
 	return success, n, err
 }
 
@@ -176,7 +179,7 @@ type payload struct {
 }
 
 type Socket struct {
-	connection    Connector
+	connection    connector
 	readQueue     concurrencyQueue
 	dataAvailable *sync.Cond
 	isReading     bool
@@ -190,7 +193,7 @@ func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
 	return newSocket(connector, errorChannel)
 }
 
-func newSocket(connector Connector, errorChannel chan error) *Socket {
+func newSocket(connector connector, errorChannel chan error) *Socket {
 	socket := &Socket{
 		connection:    connect(connector, errorChannel),
 		readQueue:     *newConcurrencyQueue(),
@@ -201,10 +204,16 @@ func newSocket(connector Connector, errorChannel chan error) *Socket {
 	return socket
 }
 
-func (socket *Socket) ErrorChannel() chan error {
-	return socket.errorChannel
+// GetNextError returns the next internal error that occurred, if any is available.
+// As this read from the underlying error channel used to propagate errors
+// that cannot be properly returned, this method will block while no error
+// available.
+func (socket *Socket) GetNextError() error {
+	return <-socket.errorChannel
 }
 
+// Close closes the underlying two-way connection interface, preventing all
+// future calls to Socket.Write and Socket.Read from having any effect
 func (socket *Socket) Close() error {
 	return socket.connection.Close()
 }

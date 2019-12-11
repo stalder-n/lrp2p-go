@@ -26,18 +26,18 @@ func (suite *atpTestSuite) handleTestError(err error) {
 	}
 }
 
-func (suite *atpTestSuite) write(c Connector, payload string, timestamp time.Time) int {
+func (suite *atpTestSuite) write(c connector, payload string, timestamp time.Time) int {
 	return suite.writeExpectStatus(c, payload, success, timestamp)
 }
 
-func (suite *atpTestSuite) writeExpectStatus(c Connector, payload string, code statusCode, timestamp time.Time) int {
+func (suite *atpTestSuite) writeExpectStatus(c connector, payload string, code statusCode, timestamp time.Time) int {
 	status, n, err := c.Write([]byte(payload), timestamp)
 	suite.handleTestError(err)
 	suite.Equal(code, status)
 	return n
 }
 
-func (suite *atpTestSuite) read(c Connector, expected string, timestamp time.Time) {
+func (suite *atpTestSuite) read(c connector, expected string, timestamp time.Time) {
 	readBuffer := make([]byte, segmentMtu)
 	status, n, err := c.Read(readBuffer, timestamp)
 	suite.handleTestError(err)
@@ -45,21 +45,21 @@ func (suite *atpTestSuite) read(c Connector, expected string, timestamp time.Tim
 	suite.Equal(success, status)
 }
 
-func (suite *atpTestSuite) readExpectStatus(c Connector, expected statusCode, timestamp time.Time) {
+func (suite *atpTestSuite) readExpectStatus(c connector, expected statusCode, timestamp time.Time) {
 	readBuffer := make([]byte, segmentMtu)
 	status, _, err := c.Read(readBuffer, timestamp)
 	suite.handleTestError(err)
 	suite.Equal(expected, status)
 }
 
-func (suite *atpTestSuite) readAck(c Connector, timestamp time.Time) {
+func (suite *atpTestSuite) readAck(c connector, timestamp time.Time) {
 	suite.readExpectStatus(c, ackReceived, timestamp)
 }
 
 var flagVerbose = flag.Bool("v", false, "show more detailed console output")
 
 type consolePrinter struct {
-	extension Connector
+	extension connector
 	Name      string
 }
 
@@ -71,7 +71,7 @@ func (printer *consolePrinter) Close() error {
 	return err
 }
 
-func (printer *consolePrinter) AddExtension(connector Connector) {
+func (printer *consolePrinter) AddExtension(connector connector) {
 	printer.extension = connector
 	if *flagVerbose {
 		println(printer.Name, reflect.TypeOf(printer).Elem().Name(), "addExtension(...)", "connector:", fmt.Sprintf("%+v", connector))
@@ -121,7 +121,7 @@ func (printer *consolePrinter) reportError(err error) {
 type segmentManipulator struct {
 	savedSegments map[uint32][]byte
 	toDropOnce    list.List
-	extension     Connector
+	extension     connector
 }
 
 func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
@@ -132,7 +132,7 @@ func (manipulator *segmentManipulator) Close() error {
 	return manipulator.extension.Close()
 }
 
-func (manipulator *segmentManipulator) AddExtension(connector Connector) {
+func (manipulator *segmentManipulator) AddExtension(connector connector) {
 	manipulator.extension = connector
 }
 
