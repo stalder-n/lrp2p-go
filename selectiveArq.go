@@ -63,7 +63,7 @@ func (arq *selectiveArq) queueTimedOutSegmentsForWrite(timestamp time.Time) {
 
 func (arq *selectiveArq) queueMissingSegmentsForWrite(ackedSegments *bitmap, timestamp time.Time) {
 	startQueueing := false
-	for i := arq.windowSize - 1; i >= 0 && i < arq.windowSize; i-- {
+	for i := arq.windowSize - 1; ; i-- {
 		seg := arq.notAckedSegment[ackedSegments.sequenceNumber%arq.windowSize+i]
 		if ackedSegments.bitmapData[i] == 1 {
 			startQueueing = true
@@ -71,6 +71,9 @@ func (arq *selectiveArq) queueMissingSegmentsForWrite(ackedSegments *bitmap, tim
 		if ackedSegments.bitmapData[i] == 0 && startQueueing {
 			arq.readyToSendSegmentQueue.PushFront(seg)
 			arq.notAckedSegment[i] = nil
+		}
+		if i == 0 {
+			break
 		}
 	}
 }
