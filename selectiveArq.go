@@ -7,7 +7,6 @@ import (
 
 // TODO: sequence diagram
 // TODO: slow start, congestion control
-// TODO: mutex for write operations
 type selectiveArq struct {
 	extension  connector
 	writeMutex sync.Mutex
