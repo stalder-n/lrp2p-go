@@ -264,6 +264,10 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	return p.n, p.err
 }
 
+func (socket *Socket) SetReadTimeout(timeout time.Duration) {
+	socket.connection.SetReadTimeout(timeout)
+}
+
 func (socket *Socket) read() {
 	for {
 		buffer := make([]byte, segmentMtu)
