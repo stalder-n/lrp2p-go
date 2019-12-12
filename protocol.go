@@ -178,8 +178,8 @@ type payload struct {
 	data []byte
 }
 
-// Socket is an ATP socket that can open a two-way connection to
-// another socket. Use atp.NewSocket create an instance.
+// Socket is an ATP Socket that can open a two-way connection to
+// another Socket. Use atp.NewSocket create an instance.
 type Socket struct {
 	connection    connector
 	readQueue     concurrencyQueue
@@ -188,7 +188,7 @@ type Socket struct {
 	errorChannel  chan error
 }
 
-// NewSocket creates a new ATP socket instance and sets up a connection
+// NewSocket creates a new ATP Socket instance and sets up a connection
 // to the specified host.
 func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
 	errorChannel := make(chan error, 100)
@@ -264,6 +264,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	return p.n, p.err
 }
 
+// SetReadTimeout sets an idle timeout for read all operations
 func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 	socket.connection.SetReadTimeout(timeout)
 }
