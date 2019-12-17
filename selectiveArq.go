@@ -132,7 +132,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	if err != nil {
 		return fail, n, err
 	}
-	seg := createSegment(buf)
+	seg := createSegment(buf[:n])
 
 	if seg.isFlaggedAs(flagACK) {
 		arq.handleAck(seg, timestamp)
@@ -140,7 +140,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	}
 
 	arq.ackedBitmap.Add(seg.getSequenceNumber(), seg)
-	_, n, err = arq.writeAck(timestamp)
+	_, _, err = arq.writeAck(timestamp)
 	if err != nil {
 		return fail, n, err
 	}

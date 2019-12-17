@@ -166,7 +166,7 @@ func (q *queue) Len() int {
 
 func (q *queue) SearchBy(comparator func(interface{}) bool) *list.List {
 	sl := list.New()
-	
+
 	for ele := q.list.Front(); ele != nil; ele = ele.Next() {
 		if comparator(ele.Value) {
 			sl.PushBack(ele.Value)
@@ -174,45 +174,4 @@ func (q *queue) SearchBy(comparator func(interface{}) bool) *list.List {
 	}
 
 	return sl
-}
-
-type concurrencyQueue struct {
-	*queue
-	mutex sync.RWMutex
-}
-
-func newConcurrencyQueue() *concurrencyQueue {
-	queue := &concurrencyQueue{}
-	queue.queue = newQueue()
-	return queue
-}
-
-func (q *concurrencyQueue) Enqueue(value interface{}) {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	q.queue.Enqueue(value)
-}
-
-func (q *concurrencyQueue) PushFront(value interface{}) {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	q.queue.PushFront(value)
-}
-
-func (q *concurrencyQueue) Dequeue() interface{} {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	return q.queue.Dequeue()
-}
-
-func (q *concurrencyQueue) Peek() interface{} {
-	q.mutex.RLock()
-	defer q.mutex.RUnlock()
-	return q.queue.Dequeue()
-}
-
-func (q *concurrencyQueue) IsEmpty() bool {
-	q.mutex.RLock()
-	defer q.mutex.RUnlock()
-	return q.queue.IsEmpty()
 }

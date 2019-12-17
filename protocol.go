@@ -1,6 +1,7 @@
 package atp
 
 import (
+	"bytes"
 	"crypto/rand"
 	"log"
 	"net"
@@ -172,17 +173,11 @@ func (connector *udpConnector) reportError(err error) {
 	}
 }
 
-type payload struct {
-	n    int
-	err  error
-	data []byte
-}
-
 // Socket is an ATP Socket that can open a two-way connection to
 // another Socket. Use atp.NewSocket create an instance.
 type Socket struct {
 	connection    connector
-	readQueue     concurrencyQueue
+	readBuffer    bytes.Buffer
 	dataAvailable *sync.Cond
 	isReading     bool
 	errorChannel  chan error
@@ -200,7 +195,6 @@ func NewSocket(remoteHost string, remotePort, localPort int) *Socket {
 func newSocket(connector connector, errorChannel chan error) *Socket {
 	socket := &Socket{
 		connection:    connect(connector, errorChannel),
-		readQueue:     *newConcurrencyQueue(),
 		dataAvailable: sync.NewCond(&sync.Mutex{}),
 		errorChannel:  errorChannel,
 	}
@@ -255,13 +249,12 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 		socket.isReading = true
 	}
 	socket.dataAvailable.L.Lock()
-	for socket.readQueue.IsEmpty() {
+	for socket.readBuffer.Len() == 0 {
 		socket.dataAvailable.Wait()
 	}
-	p := socket.readQueue.Dequeue().(*payload)
+	n, err := socket.readBuffer.Read(buffer)
 	socket.dataAvailable.L.Unlock()
-	copy(buffer, p.data[:p.n])
-	return p.n, p.err
+	return n, err
 }
 
 // SetReadTimeout sets an idle timeout for read all operations
@@ -273,10 +266,12 @@ func (socket *Socket) read() {
 	for {
 		buffer := make([]byte, segmentMtu)
 		statusCode, n, err := socket.connection.Read(buffer, time.Now())
+		socket.connection.reportError(err)
 		switch statusCode {
 		case success:
-			p := &payload{n, err, buffer}
-			socket.readQueue.Enqueue(p)
+			socket.dataAvailable.L.Lock()
+			socket.readBuffer.Write(buffer[:n])
+			socket.dataAvailable.L.Unlock()
 			socket.dataAvailable.Signal()
 		case ackReceived:
 		case invalidNonce:
