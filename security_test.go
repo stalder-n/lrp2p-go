@@ -1,4 +1,4 @@
-package goprotocol
+package atp
 
 import (
 	"crypto/rand"
@@ -10,31 +10,31 @@ import (
 )
 
 type SecurityTestSuite struct {
-	suite.Suite
+	atpTestSuite
 	alphaSecurity, betaSecurity   *securityExtension
-	alphaConnector, betaConnector *ChannelConnector
+	alphaConnector, betaConnector *channelConnector
 }
 
 func (suite *SecurityTestSuite) SetupTest() {
-	SegmentMtu = 128
+	segmentMtu = 128
 }
 
 func (suite *SecurityTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaSecurity.Close())
 	suite.handleTestError(suite.betaSecurity.Close())
-	SegmentMtu = DefaultMTU
+	segmentMtu = defaultMTU
 }
 
 func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
 	startTime := time.Now()
-	suite.alphaConnector, suite.betaConnector = &ChannelConnector{
-		In:            endpoint1,
-		Out:           endpoint2,
+	suite.alphaConnector, suite.betaConnector = &channelConnector{
+		in:            endpoint1,
+		out:           endpoint2,
 		artificialNow: startTime,
-	}, &ChannelConnector{
-		In:            endpoint2,
-		Out:           endpoint1,
+	}, &channelConnector{
+		in:            endpoint2,
+		out:           endpoint1,
 		artificialNow: startTime,
 	}
 
@@ -42,11 +42,11 @@ func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 	alphaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
 	betaKey, _ := cipherSuite.GenerateKeypair(rand.Reader)
 	if peerKeyKnown {
-		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, betaKey.Public)
-		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, alphaKey.Public)
+		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, betaKey.Public, testErrorChannel)
+		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, alphaKey.Public, testErrorChannel)
 	} else {
-		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, nil)
-		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, nil)
+		suite.alphaSecurity = newSecurityExtension(suite.alphaConnector, &alphaKey, nil, testErrorChannel)
+		suite.betaSecurity = newSecurityExtension(suite.betaConnector, &betaKey, nil, testErrorChannel)
 	}
 }
 
@@ -55,27 +55,18 @@ func (suite *SecurityTestSuite) exchangeGreeting() {
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {
-		_, _, _ = suite.alphaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
-		buf := make([]byte, SegmentMtu)
-		_, n, _ := suite.alphaSecurity.Read(buf, suite.alphaConnector.artificialNow)
-		suite.Equal(expected, string(buf[:n]))
+		suite.write(suite.alphaSecurity, expected, suite.alphaConnector.artificialNow)
+		suite.read(suite.alphaSecurity, expected, suite.alphaConnector.artificialNow)
 		group.Done()
 	}()
 	go func() {
-		buf := make([]byte, SegmentMtu)
-		_, n, _ := suite.betaSecurity.Read(buf, suite.alphaConnector.artificialNow)
-		suite.Equal(expected, string(buf[:n]))
-		_, _, _ = suite.betaSecurity.Write([]byte(expected), suite.alphaConnector.artificialNow)
+		suite.read(suite.betaSecurity, expected, suite.betaConnector.artificialNow)
+		suite.write(suite.betaSecurity, expected, suite.betaConnector.artificialNow)
 		group.Done()
 	}()
 	group.Wait()
 }
 
-func (suite *SecurityTestSuite) handleTestError(err error) {
-	if err != nil {
-		suite.Errorf(err, "Error occurred")
-	}
-}
 func (suite *SecurityTestSuite) TestExchangeGreeting() {
 	suite.mockConnections(false)
 	suite.exchangeGreeting()

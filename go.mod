@@ -1,4 +1,4 @@
-module github.com/nicosta1132/go-protocol
+module github.com/nicosta1132/atp
 
 go 1.13
 

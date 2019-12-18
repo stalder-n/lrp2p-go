@@ -1,17 +1,17 @@
-package goprotocol
+package atp
 
 import (
 	"encoding/binary"
 	"time"
 )
 
-var SegmentMtu = DefaultMTU
+var segmentMtu = defaultMTU
 
 func getDataChunkSize() int {
-	return SegmentMtu - HeaderLength
+	return segmentMtu - headerLength
 }
 
-func BytesToUint32(buffer []byte) uint32 {
+func bytesToUint32(buffer []byte) uint32 {
 	return binary.BigEndian.Uint32(buffer)
 }
 
@@ -21,104 +21,96 @@ func uint32ToBytes(data uint32) []byte {
 	return result
 }
 
-func IsFlaggedAs(input byte, flag byte) bool {
+func isFlaggedAs(input byte, flag byte) bool {
 	return input&flag == flag
 }
 
-type Segment struct {
-	Buffer         []byte
-	SequenceNumber []byte
-	Data           []byte
-	Timestamp      time.Time
+type segment struct {
+	buffer         []byte
+	sequenceNumber []byte
+	data           []byte
+	timestamp      time.Time
 }
 
-func (seg *Segment) getDataOffset() byte {
-	return seg.Buffer[DataoffsetPosition.Start]
+func (seg *segment) getDataOffset() byte {
+	return seg.buffer[dataOffsetPosition.Start]
 }
 
-func (seg *Segment) GetHeaderSize() int {
+func (seg *segment) getHeaderSize() int {
 	return int(seg.getDataOffset())
 }
 
-func (seg *Segment) getFlags() byte {
-	return seg.Buffer[FlagPosition.Start]
+func (seg *segment) getFlags() byte {
+	return seg.buffer[flagPosition.Start]
 }
 
-func (seg *Segment) IsFlaggedAs(flag byte) bool {
-	return IsFlaggedAs(seg.getFlags(), flag)
+func (seg *segment) isFlaggedAs(flag byte) bool {
+	return isFlaggedAs(seg.getFlags(), flag)
 }
 
-func (seg *Segment) GetSequenceNumber() uint32 {
-	return BytesToUint32(seg.SequenceNumber)
+func (seg *segment) getSequenceNumber() uint32 {
+	return bytesToUint32(seg.sequenceNumber)
 }
 
-func (seg *Segment) getExpectedSequenceNumber() uint32 {
-	seqNumLength := SequencenumberPosition.End - SequencenumberPosition.Start
-	return BytesToUint32(seg.Data[0:seqNumLength])
+func (seg *segment) getExpectedSequenceNumber() uint32 {
+	seqNumLength := sequenceNumberPosition.End - sequenceNumberPosition.Start
+	return bytesToUint32(seg.data[0:seqNumLength])
 }
 
-func (seg *Segment) getDataAsString() string {
-	return string(seg.Data)
+func (seg *segment) getDataAsString() string {
+	return string(seg.data)
 }
 
 func setDataOffset(buffer []byte, dataOffset byte) {
-	buffer[DataoffsetPosition.Start] = dataOffset
+	buffer[dataOffsetPosition.Start] = dataOffset
 }
 
 func setFlags(buffer []byte, flags byte) {
-	buffer[FlagPosition.Start] = flags
+	buffer[flagPosition.Start] = flags
 }
 
 func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
-	binary.BigEndian.PutUint32(buffer[SequencenumberPosition.Start:SequencenumberPosition.End], sequenceNumber)
+	binary.BigEndian.PutUint32(buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End], sequenceNumber)
 }
 
-func CreateSegment(buffer []byte) *Segment {
+func createSegment(buffer []byte) *segment {
 	var data []byte = nil
-	if len(buffer) > HeaderLength {
-		data = buffer[buffer[DataoffsetPosition.Start]:]
+	if len(buffer) > headerLength {
+		data = buffer[buffer[dataOffsetPosition.Start]:]
 	}
-	return &Segment{
-		Buffer:         buffer,
-		SequenceNumber: buffer[SequencenumberPosition.Start:SequencenumberPosition.End],
-		Data:           data,
+	return &segment{
+		buffer:         buffer,
+		sequenceNumber: buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End],
+		data:           data,
 	}
 }
 
-func CreateFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *Segment {
-	buffer := make([]byte, HeaderLength+len(data))
-	dataOffset := byte(HeaderLength)
+func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segment {
+	buffer := make([]byte, headerLength+len(data))
+	dataOffset := byte(headerLength)
 	setDataOffset(buffer, dataOffset)
 	setFlags(buffer, flags)
 	setSequenceNumber(buffer, sequenceNumber)
 	copy(buffer[dataOffset:], data)
-	return CreateSegment(buffer)
+	return createSegment(buffer)
 }
 
-func CreateAckSegment(sequenceNumber uint32, receivedSequenceNumber uint32) *Segment {
-	receivedSequenceNumberBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(receivedSequenceNumberBytes, receivedSequenceNumber)
-	return CreateFlaggedSegment(sequenceNumber, FlagACK, receivedSequenceNumberBytes)
-}
-
-func CreateSelectiveAckSegment(sequenceNumber uint32, bitmap *Bitmap) *Segment {
-	first := uint32ToBytes(bitmap.SeqNumber)
+func createAckSegment(sequenceNumber uint32, bitmap *bitmap) *segment {
+	first := uint32ToBytes(bitmap.sequenceNumber)
 	second := uint32ToBytes(bitmap.ToNumber())
-
 	data := append(first, second...)
-
-	return CreateFlaggedSegment(sequenceNumber, FlagSelectiveACK, data)
+	return createFlaggedSegment(sequenceNumber, flagACK, data)
 }
 
-func CreateSegments(buffer []byte, seqNumFactory func() uint32) *Queue {
-	result := NewQueue()
+func createSegments(buffer []byte, seqNumFactory func() uint32) *queue {
+	result := newQueue()
 
-	var seg *Segment
+	var seg *segment
 	currentIndex := 0
 	for {
-		currentIndex, seg = PeekFlaggedSegmentOfBuffer(currentIndex, seqNumFactory(), buffer)
+		currentIndex, seg = getNextSegmentInBuffer(currentIndex, seqNumFactory(), buffer)
 		result.Enqueue(seg)
-		if currentIndex == len(buffer) {
+		if currentIndex >= len(buffer) {
 			break
 		}
 	}
@@ -126,14 +118,23 @@ func CreateSegments(buffer []byte, seqNumFactory func() uint32) *Queue {
 	return result
 }
 
-func PeekFlaggedSegmentOfBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *Segment) {
+func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
 	var next = currentIndex + getDataChunkSize()
 	var flag byte = 0
 	if currentIndex == 0 {
-		flag |= FlagSYN
+		flag |= flagSYN
 	}
 	if next >= len(buffer) {
 		next = len(buffer)
 	}
-	return next, CreateFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
+	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
+}
+
+func hasSegmentTimedOut(seg *segment, timestamp time.Time) bool {
+	if seg == nil {
+		return false
+	}
+
+	timeout := seg.timestamp.Add(retransmissionTimeout)
+	return timestamp.After(timeout)
 }
