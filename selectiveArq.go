@@ -5,7 +5,24 @@ import (
 	"time"
 )
 
-// TODO: sequence diagram
+//   ┌───────┐          ┌───────┐
+//   │Socket1│          │Socket2│
+//   └───┬───┘          └───┬───┘
+//       │   Segment(1)     │
+//       │─────────────────>│
+//       │                  │
+//       │   Segment(2)     │
+//       │<─────────────────│
+//       │                  │
+//       │     ACK(1)       │
+//       │<─ ─ ─ ─ ─ ─ ─ ─ ─│
+//       │                  │
+//       │     ACK(2)       │
+//       │ ─ ─ ─ ─ ─ ─ ─ ─ >│
+//   ┌───┴───┐          ┌───┴───┐
+//   │Socket1│          │Socket2│
+//   └───────┘          └───────┘
+// The sequence above shows the default case for this ARQ component
 // TODO: slow start, congestion control
 type selectiveArq struct {
 	extension  connector
