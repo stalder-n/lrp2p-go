@@ -19,7 +19,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/nicosta1132/atp"
+	"github.com/nicosta1132/atp-go"
 )
 
 func main() {
@@ -36,7 +36,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/nicosta1132/atp"
+	"github.com/nicosta1132/atp-go"
 )
 
 func main() {
