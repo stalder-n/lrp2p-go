@@ -1,4 +1,4 @@
-module github.com/nicosta1132/atp
+module github.com/nicosta1132/atp-go
 
 go 1.13
 
