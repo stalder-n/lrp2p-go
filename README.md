@@ -23,9 +23,9 @@ import (
 )
 
 func main() {
-	socket := atp.NewSocket("localhost", 3031, 3030)
-	_, err := socket.Write([]byte("Hello World"))
-	if err != nil {
+    socket := atp.NewSocket("localhost", 3031, 3030)
+    _, err := socket.Write([]byte("Hello World"))
+    if err != nil {
 		panic(err)
 	}
 }
@@ -40,7 +40,7 @@ import (
 )
 
 func main() {
-	socket := atp.NewSocket("localhost", 3030, 3031)
+    socket := atp.NewSocket("localhost", 3030, 3031)
     readBuffer := make([]byte, 32)
     _, err := socket.Read(readBuffer)
     fmt.Println(string(readBuffer))
