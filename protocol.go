@@ -174,7 +174,7 @@ func (connector *udpConnector) reportError(err error) {
 }
 
 // Socket is an ATP Socket that can open a two-way connection to
-// another Socket. Use atp.NewSocket create an instance.
+// another Socket. Use atp.NewSocket to create an instance.
 type Socket struct {
 	connection    connector
 	readBuffer    bytes.Buffer
