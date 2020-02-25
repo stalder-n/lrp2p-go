@@ -18,16 +18,16 @@ While ATP is a general purpose protocol, it is especially useful for developers 
 package main
 
 import (
-	"fmt"
-	"github.com/nicosta1132/atp-go"
+    "fmt"
+    "github.com/nicosta1132/atp-go"
 )
 
 func main() {
     socket := atp.NewSocket("localhost", 3031, 3030)
     _, err := socket.Write([]byte("Hello World"))
     if err != nil {
-		panic(err)
-	}
+        panic(err)
+    }
 }
 ```
 ### Client 2
@@ -35,8 +35,8 @@ func main() {
 package main
 
 import (
-	"fmt"
-	"github.com/nicosta1132/atp-go"
+    "fmt"
+    "github.com/nicosta1132/atp-go"
 )
 
 func main() {
