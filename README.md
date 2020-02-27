@@ -1,5 +1,5 @@
 # ATP - ARQ Transmission Protocol
-![go test](https://github.com/nicosta1132/atp-go/workflows/Go/badge.svg)
+![go test](https://github.com/nicosta1132/atp-go/workflows/go%20test/badge.svg)
 
 ## Introduction
 ATP is a 0-RTT network protocol with reliability features and built-in asymmetric encryption. It is intended to be similar in features to TCP, while avoiding some of its drawbacks.
