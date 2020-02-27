@@ -21,7 +21,7 @@ func init() {
 }
 
 func (suite *atpTestSuite) handleTestError(err error) {
-	if err != nil {
+	if err != nil && len(testErrorChannel) > 0 {
 		suite.Errorf(err, "Error occurred")
 	}
 }

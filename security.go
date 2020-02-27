@@ -71,6 +71,10 @@ func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCo
 	}
 	encrypted := make([]byte, segmentMtu)
 	statusCode, n, err := sec.connector.Read(encrypted, timestamp)
+	if err != nil {
+		sec.reportError(err)
+		return statusCode, n, err
+	}
 	nonce := binary.BigEndian.Uint64(encrypted[:8])
 	nonceStatus := sec.syncNonces(nonce)
 	if nonceStatus != success {
@@ -120,9 +124,9 @@ func (sec *securityExtension) writeHandshakeMessage(payload []byte, timestamp ti
 	return cs0, cs1
 }
 
+// TODO set timeout for handshake
 func (sec *securityExtension) readHandshakeMessage(timestamp time.Time) (statusCode, []byte, *noise.CipherState, *noise.CipherState) {
 	readBuffer := make([]byte, segmentMtu)
-	sec.SetReadTimeout(1 * time.Second)
 	statusCode, n, _ := sec.connector.Read(readBuffer, timestamp)
 	if statusCode == timeout {
 		return timeout, nil, nil, nil
@@ -159,6 +163,7 @@ func createHandshakeState(keyRef *noise.DHKey, peerKey []byte, handshakePattern 
 	return handshake
 }
 
+// TODO correctly handle potential handshake timeout
 type handshakeStrategy interface {
 	initiate(payload []byte, timestamp time.Time) bool
 	accept(timestamp time.Time) []byte
@@ -177,7 +182,10 @@ func (h *handshakeXXStrategy) initiate(payload []byte, timestamp time.Time) bool
 }
 
 func (h *handshakeXXStrategy) accept(timestamp time.Time) []byte {
-	h.sec.readHandshakeMessage(timestamp)
+	state := timeout
+	for ; state == timeout; {
+		state, _, _, _ = h.sec.readHandshakeMessage(timestamp)
+	}
 	h.sec.writeHandshakeMessage(nil, timestamp)
 	_, _, h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage(timestamp)
 	return nil

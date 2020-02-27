@@ -59,6 +59,7 @@ var generateRandomSequenceNumber = func() uint32 {
 	return sequenceNum
 }
 
+// TODO remove and replace calls with connector.reportError
 func reportError(err error) {
 	if err != nil {
 		log.Println(err)

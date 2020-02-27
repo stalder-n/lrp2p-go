@@ -109,7 +109,7 @@ func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, i
 			return fail, n, err
 		}
 
-		sumN += n
+		sumN += len(seg.data)
 		arq.notAckedSegment[seg.getSequenceNumber()%arq.windowSize] = seg
 	}
 
