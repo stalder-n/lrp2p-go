@@ -88,35 +88,27 @@ func handleError(err error) {
 }
 
 type udpConnector struct {
-	udpConnection net.PacketConn
-	remoteAddr    *net.UDPAddr
-	timeout       time.Duration
-	errorChannel  chan error
+	server       *net.UDPConn
+	client       *net.UDPConn
+	timeout      time.Duration
+	errorChannel chan error
 }
 
 const timeoutErrorString = "i/o timeout"
 
 func udpListen(localPort int, errorChannel chan error) (*udpConnector, error) {
-	connection, err := net.ListenPacket("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
+	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
+	connection, err := net.ListenUDP("udp", remoteAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	connector := &udpConnector{
-		udpConnection: connection,
-		timeout:       0,
-		errorChannel:  errorChannel,
+		server:       connection,
+		timeout:      0,
+		errorChannel: errorChannel,
 	}
 
-	return connector, nil
-}
-
-func udpConnect(remoteHostname string, remotePort, localPort int, errorChannel chan error) (*udpConnector, error) {
-	connector, err := udpListen(localPort, errorChannel)
-	if err != nil {
-		return nil, err
-	}
-	connector.remoteAddr = createUDPAddress(remoteHostname, remotePort)
 	return connector, nil
 }
 
@@ -128,26 +120,26 @@ func createUDPAddress(addressString string, port int) *net.UDPAddr {
 }
 
 func (connector *udpConnector) Close() error {
-	return connector.udpConnection.Close()
+	senderError := connector.client.Close()
+	receiverError := connector.server.Close()
+	if senderError != nil {
+		return senderError
+	}
+	return receiverError
 }
-
 func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	n, err := connector.udpConnection.WriteTo(buffer, connector.remoteAddr)
+	n, err := connector.client.Write(buffer)
 	if err != nil {
 		return fail, n, err
 	}
 	return success, n, err
 }
 
-func (connector *udpConnector) connectToClient(raddr net.Addr) {
-	remote, err := net.ResolveUDPAddr(raddr.Network(), raddr.String())
-	connector.reportError(err)
-	connector.remoteAddr = remote
-}
-
 func (connector *udpConnector) ConnectTo(remoteHost string, remotePort int) {
 	remoteAddr := createUDPAddress(remoteHost, remotePort)
-	connector.remoteAddr = remoteAddr
+	client, err := net.DialUDP("udp", nil, remoteAddr)
+	handleError(err)
+	connector.client = client
 }
 
 func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
@@ -157,12 +149,9 @@ func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusC
 	} else {
 		deadline = timeZero
 	}
-	err := connector.udpConnection.SetReadDeadline(deadline)
+	err := connector.server.SetReadDeadline(deadline)
 	reportError(err)
-	n, raddr, err := connector.udpConnection.ReadFrom(buffer)
-	if connector.remoteAddr == nil {
-		connector.connectToClient(raddr)
-	}
+	n, err := connector.server.Read(buffer)
 	if err != nil {
 		switch err.(type) {
 		case *net.OpError:
@@ -199,15 +188,6 @@ type Socket struct {
 func SocketListen(localPort int) *Socket {
 	errorChannel := make(chan error, 100)
 	connector, err := udpListen(localPort, errorChannel)
-	reportError(err)
-	return newSocket(connector, errorChannel)
-}
-
-// SocketConnect creates a new ATP Socket instance and sets up a connection
-// to the specified host.
-func SocketConnect(remoteHost string, remotePort, localPort int) *Socket {
-	errorChannel := make(chan error, 100)
-	connector, err := udpConnect(remoteHost, remotePort, localPort, errorChannel)
 	reportError(err)
 	return newSocket(connector, errorChannel)
 }
