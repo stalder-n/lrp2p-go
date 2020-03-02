@@ -119,7 +119,7 @@ func newUDPConnector(remoteHostname string, remotePort, localPort int, errorChan
 }
 
 func createUDPAddress(addressString string, port int) *net.UDPAddr {
-	address := addressString + ":" + strconv.Itoa(port)
+	address := net.JoinHostPort(addressString, strconv.Itoa(port))
 	udpAddress, err := net.ResolveUDPAddr("udp4", address)
 	handleError(err)
 	return udpAddress
