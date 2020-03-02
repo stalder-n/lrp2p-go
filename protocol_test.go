@@ -14,9 +14,9 @@ type UDPConnectorTestSuite struct {
 }
 
 func (suite *UDPConnectorTestSuite) SetupTest() {
-	alphaConnection, err := newUDPConnector("localhost", 3031, 3030, testErrorChannel)
+	alphaConnection, err := udpConnect("localhost", 3031, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnection, err := newUDPConnector("localhost", 3030, 3031, testErrorChannel)
+	betaConnection, err := udpConnect("localhost", 3030, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	suite.alphaConnection = alphaConnection
 	suite.betaConnection = betaConnection
@@ -48,9 +48,9 @@ type SecureConnectionTestSuite struct {
 }
 
 func (suite *SecureConnectionTestSuite) SetupTest() {
-	alphaConnector, err := newUDPConnector("localhost", 3031, 3030, testErrorChannel)
+	alphaConnector, err := udpConnect("localhost", 3031, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnector, err := newUDPConnector("localhost", 3030, 3031, testErrorChannel)
+	betaConnector, err := udpConnect("localhost", 3030, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	suite.alphaConnection = newSecurityExtension(alphaConnector, nil, nil, testErrorChannel)
 	suite.betaConnection = newSecurityExtension(betaConnector, nil, nil, testErrorChannel)
@@ -91,9 +91,9 @@ type ArqConnectionTestSuite struct {
 }
 
 func (suite *ArqConnectionTestSuite) SetupTest() {
-	alphaConnector, err := newUDPConnector("localhost", 3031, 3030, testErrorChannel)
+	alphaConnector, err := udpConnect("localhost", 3031, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnector, err := newUDPConnector("localhost", 3030, 3031, testErrorChannel)
+	betaConnector, err := udpConnect("localhost", 3030, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	suite.alphaConnection = newSelectiveArq(1, alphaConnector, testErrorChannel)
 	suite.betaConnection = newSelectiveArq(1, betaConnector, testErrorChannel)
@@ -128,9 +128,9 @@ type FullConnectionTestSuite struct {
 }
 
 func (suite *FullConnectionTestSuite) SetupTest() {
-	alphaConnector, err := newUDPConnector("localhost", 3031, 3030, testErrorChannel)
+	alphaConnector, err := udpConnect("localhost", 3031, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnector, err := newUDPConnector("localhost", 3030, 3031, testErrorChannel)
+	betaConnector, err := udpConnect("localhost", 3030, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	suite.alphaConnection = connect(alphaConnector, testErrorChannel)
 	suite.betaConnection = connect(betaConnector, testErrorChannel)
@@ -174,9 +174,8 @@ type SocketTestSuite struct {
 }
 
 func (suite *SocketTestSuite) SetupTest() {
-	suite.alphaSocket = NewSocket("localhost", 3031, 3030)
-	suite.betaSocket = NewSocket("localhost", 3030, 3031)
-
+	suite.alphaSocket = SocketConnect("localhost", 3031, 3030)
+	suite.betaSocket = SocketConnect("localhost", 3030, 3031)
 }
 
 func (suite *SocketTestSuite) TearDownTest() {

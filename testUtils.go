@@ -63,6 +63,10 @@ type consolePrinter struct {
 	Name      string
 }
 
+func (printer *consolePrinter) ConnectTo(remoteHost string, remotePort int) {
+	printer.extension.ConnectTo(remoteHost, remotePort)
+}
+
 func (printer *consolePrinter) Close() error {
 	err := printer.extension.Close()
 	if *flagVerbose {
@@ -124,6 +128,10 @@ type segmentManipulator struct {
 	extension     connector
 }
 
+func (manipulator *segmentManipulator) ConnectTo(remoteHost string, remotePort int) {
+	manipulator.extension.ConnectTo(remoteHost, remotePort)
+}
+
 func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	return manipulator.extension.Read(buffer, time.Now())
 }
@@ -166,6 +174,10 @@ type channelConnector struct {
 	out           chan []byte
 	timeout       time.Duration
 	artificialNow time.Time
+}
+
+func (connector *channelConnector) ConnectTo(remoteHost string, remotePort int) {
+	panic("not implemented")
 }
 
 func (connector *channelConnector) Close() error {

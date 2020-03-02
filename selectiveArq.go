@@ -39,6 +39,10 @@ type selectiveArq struct {
 	errorChannel            chan error
 }
 
+func (arq *selectiveArq) ConnectTo(remoteHost string, remotePort int) {
+	arq.extension.ConnectTo(remoteHost, remotePort)
+}
+
 func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
 	var windowSize uint32 = 20
 	arq := &selectiveArq{
