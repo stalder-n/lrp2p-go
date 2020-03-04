@@ -133,7 +133,7 @@ func (manipulator *segmentManipulator) ConnectTo(remoteHost string, remotePort i
 }
 
 func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	return manipulator.extension.Read(buffer, time.Now())
+	return manipulator.extension.Read(buffer, timestamp)
 }
 
 func (manipulator *segmentManipulator) Close() error {
@@ -156,7 +156,7 @@ func (manipulator *segmentManipulator) Write(buffer []byte, timestamp time.Time)
 			return success, len(buffer), nil
 		}
 	}
-	return manipulator.extension.Write(buffer, time.Now())
+	return manipulator.extension.Write(buffer, timestamp)
 }
 
 func (manipulator *segmentManipulator) SetReadTimeout(t time.Duration) {

@@ -95,12 +95,20 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segme
 	return createSegment(buffer)
 }
 
-func createAckSegment(sequenceNumber uint32, bitmap *bitmap) *segment {
+func createAckSegment_deprecated(sequenceNumber uint32, bitmap *bitmap) *segment {
 	first := uint32ToBytes(bitmap.sequenceNumber)
 	second := uint32ToBytes(bitmap.ToNumber())
 	data := append(first, second...)
 	return createFlaggedSegment(sequenceNumber, flagACK, data)
 }
+
+/*func createAckSegment(sequenceNumber uint32, segmentBuffer []*segment) *segment {
+	inSequence := 0
+	for i, seg := range segmentBuffer {
+
+	}
+	return createFlaggedSegment(sequenceNumber, flagACK, data)
+}*/
 
 func createSegments(buffer []byte, seqNumFactory func() uint32) *queue {
 	result := newQueue()

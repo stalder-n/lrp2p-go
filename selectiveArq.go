@@ -25,36 +25,32 @@ import (
 // The sequence above shows the default case for this ARQ component
 // TODO: slow start, congestion control
 type selectiveArq struct {
-	extension  connector
-	writeMutex sync.Mutex
-	//receiver
-	ackedBitmap *bitmap
+	extension    connector
+	writeMutex   sync.Mutex
+	errorChannel chan error
 
-	//sender
-	notAckedSegment         []*segment
-	readyToSendSegmentQueue *queue
-	currentSequenceNumber   uint32
-	window                  uint32
-	windowSize              uint32
-	errorChannel            chan error
-}
+	// receiver
+	nextExpectedSequenceNumber uint32
+	segmentBuffer              []*segment
 
-func (arq *selectiveArq) ConnectTo(remoteHost string, remotePort int) {
-	arq.extension.ConnectTo(remoteHost, remotePort)
+	// sender
+	currentSequenceNumber uint32
+	sendQueue             []*segment
+	waitingForAck         []*segment
+	sendSynFlag           bool
 }
 
 func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
-	var windowSize uint32 = 20
-	arq := &selectiveArq{
-		extension:               extension,
-		readyToSendSegmentQueue: newQueue(),
-		notAckedSegment:         make([]*segment, 32),
-		ackedBitmap:             newEmptyBitmap(32),
-		currentSequenceNumber:   initialSequenceNumber,
-		windowSize:              windowSize,
-		errorChannel:            errors,
+	return &selectiveArq{
+		extension:                  extension,
+		errorChannel:               errors,
+		nextExpectedSequenceNumber: 0,
+		segmentBuffer:              make([]*segment, 0),
+		currentSequenceNumber:      initialSequenceNumber,
+		sendQueue:                  make([]*segment, 0),
+		waitingForAck:              make([]*segment, 0),
+		sendSynFlag:                true,
 	}
-	return arq
 }
 
 func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
@@ -63,36 +59,74 @@ func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
 	return result
 }
 
-func (arq *selectiveArq) Close() error {
-	return arq.extension.Close()
+func (arq *selectiveArq) handleAck(seg *segment) {
+	// TODO
 }
 
-func (arq *selectiveArq) addExtension(extension connector) {
-	arq.extension = extension
+func (arq *selectiveArq) writeAck() {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
+	// TODO
 }
 
-func (arq *selectiveArq) queueTimedOutSegmentsForWrite(timestamp time.Time) {
-	for i := 0; i < len(arq.notAckedSegment); i++ {
-		seg := arq.notAckedSegment[i]
-		if hasSegmentTimedOut(seg, timestamp) {
-			arq.readyToSendSegmentQueue.PushFront(seg)
-			arq.notAckedSegment[i] = nil
-		}
+func (arq *selectiveArq) hasAvailableSegments() bool {
+	return len(arq.segmentBuffer) > 0 && arq.segmentBuffer[0].getSequenceNumber() == arq.nextExpectedSequenceNumber
+}
+
+func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	if arq.hasAvailableSegments() {
+		var seg *segment
+		seg, arq.segmentBuffer = popSegment(arq.segmentBuffer)
+		copy(buffer, seg.data)
+		return success, len(seg.data), nil
 	}
+	buf := make([]byte, len(buffer))
+	status, _, err := arq.extension.Read(buf, timestamp)
+
+	if status != success {
+		return status, 0, err
+	}
+
+	seg := createSegment(buf)
+	if arq.nextExpectedSequenceNumber == 0 && !seg.isFlaggedAs(flagSYN) {
+		return fail, 0, err
+	} else if arq.nextExpectedSequenceNumber == 0 {
+		arq.nextExpectedSequenceNumber = seg.getSequenceNumber()
+	}
+	if seg.isFlaggedAs(flagACK) {
+		arq.handleAck(seg)
+		return ackReceived, 0, err
+	}
+
+	if seg.getSequenceNumber() < arq.nextExpectedSequenceNumber {
+		arq.writeAck()
+		return invalidSegment, 0, err
+	}
+	insertSegmentInOrder(arq.segmentBuffer, seg)
+	arq.writeAck()
+	copy(buffer, seg.data)
+	return success, len(seg.data), err
 }
 
-func (arq *selectiveArq) queueMissingSegmentsForWrite(ackedSegments *bitmap, timestamp time.Time) {
-	startQueueing := false
-	for i := arq.windowSize - 1; ; i-- {
-		seg := arq.notAckedSegment[(ackedSegments.sequenceNumber+i)%arq.windowSize]
-		if ackedSegments.bitmapData[i] == 1 {
-			startQueueing = true
-		}
-		if ackedSegments.bitmapData[i] == 0 && startQueueing {
-			arq.readyToSendSegmentQueue.PushFront(seg)
-			arq.notAckedSegment[i] = nil
-		}
-		if i == 0 {
+func (arq *selectiveArq) getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
+	var next = currentIndex + getDataChunkSize()
+	var flag byte = 0
+	if arq.sendSynFlag {
+		flag |= flagSYN
+		arq.sendSynFlag = false
+	}
+	if next >= len(buffer) {
+		next = len(buffer)
+	}
+	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
+}
+
+func (arq *selectiveArq) queueNewSegments(buffer []byte) {
+	currentIndex := 0
+	for {
+		currentIndex, seg := getNextSegmentInBuffer(currentIndex, arq.getAndIncrementCurrentSequenceNumber(), buffer)
+		arq.sendQueue = append(arq.sendQueue, seg)
+		if currentIndex >= len(buffer) {
 			break
 		}
 	}
@@ -100,35 +134,17 @@ func (arq *selectiveArq) queueMissingSegmentsForWrite(ackedSegments *bitmap, tim
 
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
-	for !arq.readyToSendSegmentQueue.IsEmpty() {
-		if arq.window >= arq.windowSize {
-			return windowFull, sumN, nil
+	for len(arq.sendQueue) > 0 {
+		seg := arq.sendQueue[0]
+		statusCode, _, err := arq.extension.Write(seg.buffer, timestamp)
+		if statusCode != success {
+			return statusCode, sumN, err
 		}
-		seg := arq.readyToSendSegmentQueue.Dequeue().(*segment)
-		_, n, err := arq.extension.Write(seg.buffer, timestamp)
-		seg.timestamp = timestamp
-		arq.reduceWindow()
-
-		if err != nil {
-			return fail, n, err
-		}
-
+		_, arq.sendQueue = popSegment(arq.sendQueue)
+		insertSegmentInOrder(arq.waitingForAck, seg)
 		sumN += len(seg.data)
-		arq.notAckedSegment[seg.getSequenceNumber()%arq.windowSize] = seg
 	}
-
 	return success, sumN, nil
-}
-
-func (arq *selectiveArq) queueNewSegments(buffer []byte) {
-	if len(buffer) == 0 {
-		return
-	}
-	newSegmentQueue := createSegments(buffer, arq.getAndIncrementCurrentSequenceNumber)
-	for !newSegmentQueue.IsEmpty() {
-		segment := newSegmentQueue.Dequeue()
-		arq.readyToSendSegmentQueue.Enqueue(segment)
-	}
 }
 
 func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
@@ -136,46 +152,19 @@ func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, 
 	defer arq.writeMutex.Unlock()
 
 	arq.queueNewSegments(buffer)
-	arq.queueTimedOutSegmentsForWrite(timestamp)
-	status, n, err := arq.writeQueuedSegments(timestamp)
-	return status, n, err
+	return arq.writeQueuedSegments(timestamp)
 }
 
-func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	buf := make([]byte, segmentMtu)
-	segOrdered := arq.ackedBitmap.GetAndRemoveInorder()
-	if segOrdered != nil {
-		copy(buffer, segOrdered.data)
-		return success, len(segOrdered.data), nil
-	}
-
-	status, n, err := arq.extension.Read(buf, timestamp)
-	if err != nil {
-		return fail, n, err
-	}
-	seg := createSegment(buf[:n])
-
-	if seg.isFlaggedAs(flagACK) {
-		arq.handleAck(seg, timestamp)
-		return ackReceived, n, err
-	}
-
-	arq.ackedBitmap.Add(seg.getSequenceNumber(), seg)
-	_, _, err = arq.writeAck(timestamp)
-	if err != nil {
-		return fail, n, err
-	}
-
-	segOrdered = arq.ackedBitmap.GetAndRemoveInorder()
-	if segOrdered != nil {
-		copy(buffer, segOrdered.data)
-		return status, len(segOrdered.data), nil
-	}
-	return invalidSegment, 0, err
+func (arq *selectiveArq) Close() error {
+	return arq.extension.Close()
 }
 
-func (arq *selectiveArq) SetReadTimeout(t time.Duration) {
-	arq.extension.SetReadTimeout(t)
+func (arq *selectiveArq) SetReadTimeout(timeout time.Duration) {
+	arq.extension.SetReadTimeout(timeout)
+}
+
+func (arq *selectiveArq) ConnectTo(remoteHost string, remotePort int) {
+	arq.extension.ConnectTo(remoteHost, remotePort)
 }
 
 func (arq *selectiveArq) reportError(err error) {
@@ -184,45 +173,27 @@ func (arq *selectiveArq) reportError(err error) {
 	}
 }
 
-func (arq *selectiveArq) handleAck(seg *segment, timestamp time.Time) {
-	arq.writeMutex.Lock()
-	defer arq.writeMutex.Unlock()
-	ackedBitmap := newBitmap(arq.windowSize, bytesToUint32(seg.data[:4]), bytesToUint32(seg.data[4:]))
-	arq.removeAckedSegment(ackedBitmap)
-	arq.queueMissingSegmentsForWrite(ackedBitmap, timestamp)
-	_, _, err := arq.writeQueuedSegments(timestamp)
-	reportError(err)
-}
-
-func (arq *selectiveArq) removeAckedSegment(ackedBitmap *bitmap) {
-	for i, seg := range arq.notAckedSegment {
-		if seg != nil && seg.getSequenceNumber() < ackedBitmap.sequenceNumber {
-			arq.notAckedSegment[i] = nil
-			arq.increaseWindow()
+func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
+	for i, seg := range segments {
+		if insert.getSequenceNumber() < seg.getSequenceNumber() {
+			segments = append(segments, nil)
+			copy(segments[i+1:], segments[i:])
+			segments[i] = insert
+			return segments
 		}
 	}
+	return append(segments, insert)
+}
 
-	for i, bit := range ackedBitmap.bitmapData {
-		if bit == 1 {
-			index := (ackedBitmap.sequenceNumber + uint32(i)) % arq.windowSize
-			arq.notAckedSegment[index] = nil
-			arq.increaseWindow()
+func removeSegment(segments []*segment, sequenceNumber uint32) (*segment, []*segment) {
+	for i, seg := range segments {
+		if seg.getSequenceNumber() == sequenceNumber {
+			return seg, append(segments[:i], segments[i+1:]...)
 		}
 	}
+	return nil, segments
 }
 
-func (arq *selectiveArq) writeAck(timestamp time.Time) (statusCode, int, error) {
-	ack := createAckSegment(arq.getAndIncrementCurrentSequenceNumber(), arq.ackedBitmap)
-	return arq.extension.Write(ack.buffer, timestamp)
-}
-
-func (arq *selectiveArq) reduceWindow() {
-	arq.window++
-}
-
-func (arq *selectiveArq) increaseWindow() {
-	if arq.window > 0 {
-		arq.window--
-	}
-
+func popSegment(segments []*segment) (*segment, []*segment) {
+	return segments[0], segments[1:]
 }
