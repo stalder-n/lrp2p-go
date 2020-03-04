@@ -14,7 +14,7 @@ While ATP is a general purpose protocol, it is especially useful for developers 
 
 ## Simple Example
 
-### Client 1
+### Peer 1
 ```go
 package main
 
@@ -24,14 +24,15 @@ import (
 )
 
 func main() {
-    socket := atp.NewSocket("localhost", 3031, 3030)
+    socket := atp.SocketListen(3030)
+    socket.ConnectTo("localhost", 3031)
     _, err := socket.Write([]byte("Hello World"))
     if err != nil {
         panic(err)
     }
 }
 ```
-### Client 2
+### Peer 2
 ```go
 package main
 
@@ -41,10 +42,11 @@ import (
 )
 
 func main() {
-    socket := atp.NewSocket("localhost", 3030, 3031)
+    socket := atp.SocketListen(3031)
+    socket.ConnectTo("localhost", 3030)
     readBuffer := make([]byte, 32)
-    _, err := socket.Read(readBuffer)
-    fmt.Println(string(readBuffer))
+    n, err := socket.Read(readBuffer)
+    fmt.Println(string(readBuffer[:n]))
     if err != nil {
         panic(err)
     }
