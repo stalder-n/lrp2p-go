@@ -44,6 +44,57 @@ func (suite *SegmentTestSuite) Test_uint32ToBytes() {
 	suite.Equal(4, len(test))
 }
 
+func (suite *SegmentTestSuite) TestCreateAckSegment() {
+	segs := make([]*segment, 0, 3)
+	segs = append(segs, createFlaggedSegment(2, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(4, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(6, 0, []byte{}))
+
+	ack := createAckSegment(1, segs)
+	suite.Len(ack.data, 15)
+	suite.EqualValues([]byte{
+		0, 0, 0, 2, ackDelimSeq,
+		0, 0, 0, 4, ackDelimSeq,
+		0, 0, 0, 6, ackDelimEnd}, ack.data)
+}
+
+func (suite *SegmentTestSuite) TestCreateAckSegmentWithRanges() {
+	segs := make([]*segment, 0, 3)
+	segs = append(segs, createFlaggedSegment(2, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(3, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(5, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(6, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(7, 0, []byte{}))
+
+	ack := createAckSegment(1, segs)
+	suite.Len(ack.data, 20)
+	suite.EqualValues([]byte{
+		0, 0, 0, 2, ackDelimRange, 0, 0, 0, 3, ackDelimSeq,
+		0, 0, 0, 5, ackDelimRange, 0, 0, 0, 7, ackDelimEnd}, ack.data)
+}
+
+func (suite *SegmentTestSuite) TestCreateComplexAckSegment() {
+	segs := make([]*segment, 0, 3)
+	segs = append(segs, createFlaggedSegment(2, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(4, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(5, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(6, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(7, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(9, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(11, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(13, 0, []byte{}))
+	segs = append(segs, createFlaggedSegment(14, 0, []byte{}))
+
+	ack := createAckSegment(1, segs)
+	suite.Len(ack.data, 35)
+	suite.EqualValues([]byte{
+		0, 0, 0, 2, ackDelimSeq,
+		0, 0, 0, 4, ackDelimRange, 0, 0, 0, 7, ackDelimSeq,
+		0, 0, 0, 9, ackDelimSeq,
+		0, 0, 0, 11, ackDelimSeq,
+		0, 0, 0, 13, ackDelimRange, 0, 0, 0, 14, ackDelimEnd}, ack.data)
+}
+
 func TestSegment(t *testing.T) {
 	suite.Run(t, &SegmentTestSuite{})
 }

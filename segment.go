@@ -7,6 +7,12 @@ import (
 
 var segmentMtu = defaultMTU
 
+const (
+	ackDelimSeq   byte = 1
+	ackDelimRange byte = 2
+	ackDelimEnd   byte = 4
+)
+
 func getDataChunkSize() int {
 	return segmentMtu - headerLength
 }
@@ -95,13 +101,50 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segme
 	return createSegment(buffer)
 }
 
-/*func createAckSegment(sequenceNumber uint32, segmentBuffer []*segment) *segment {
-	inSequence := 0
-	for i, seg := range segmentBuffer {
+func isInSequence(seg1, seg2 *segment) bool {
+	return seg1.getSequenceNumber()+1 == seg2.getSequenceNumber()
+}
 
+func createAckSegment(sequenceNumber uint32, segmentBuffer []*segment) *segment {
+	data := make([]byte, 0, segmentMtu)
+	var prevSeg *segment
+	var lastDelim byte = 0
+
+	for _, seg := range segmentBuffer {
+		switch lastDelim {
+		case ackDelimSeq:
+			if isInSequence(prevSeg, seg) {
+				data[len(data)-1] = ackDelimRange
+				data = append(data, seg.sequenceNumber...)
+				lastDelim = ackDelimRange
+			} else {
+				data = append(data, seg.sequenceNumber...)
+				data = append(data, ackDelimSeq)
+			}
+		case ackDelimRange:
+			if isInSequence(prevSeg, seg) {
+				copy(data[len(data)-4:], seg.sequenceNumber)
+			} else {
+				data = append(data, ackDelimSeq)
+				data = append(data, seg.sequenceNumber...)
+				data = append(data, ackDelimSeq)
+				lastDelim = ackDelimSeq
+			}
+		default:
+			data = append(data, seg.sequenceNumber...)
+			data = append(data, ackDelimSeq)
+			lastDelim = ackDelimSeq
+		}
+		prevSeg = seg
 	}
+	if lastDelim == ackDelimSeq {
+		data[len(data)-1] = ackDelimEnd
+	} else {
+		data = append(data, ackDelimEnd)
+	}
+
 	return createFlaggedSegment(sequenceNumber, flagACK, data)
-}*/
+}
 
 func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
 	var next = currentIndex + getDataChunkSize()
