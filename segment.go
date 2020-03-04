@@ -95,13 +95,6 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segme
 	return createSegment(buffer)
 }
 
-func createAckSegment_deprecated(sequenceNumber uint32, bitmap *bitmap) *segment {
-	first := uint32ToBytes(bitmap.sequenceNumber)
-	second := uint32ToBytes(bitmap.ToNumber())
-	data := append(first, second...)
-	return createFlaggedSegment(sequenceNumber, flagACK, data)
-}
-
 /*func createAckSegment(sequenceNumber uint32, segmentBuffer []*segment) *segment {
 	inSequence := 0
 	for i, seg := range segmentBuffer {
@@ -109,22 +102,6 @@ func createAckSegment_deprecated(sequenceNumber uint32, bitmap *bitmap) *segment
 	}
 	return createFlaggedSegment(sequenceNumber, flagACK, data)
 }*/
-
-func createSegments(buffer []byte, seqNumFactory func() uint32) *queue {
-	result := newQueue()
-
-	var seg *segment
-	currentIndex := 0
-	for {
-		currentIndex, seg = getNextSegmentInBuffer(currentIndex, seqNumFactory(), buffer)
-		result.Enqueue(seg)
-		if currentIndex >= len(buffer) {
-			break
-		}
-	}
-
-	return result
-}
 
 func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
 	var next = currentIndex + getDataChunkSize()
