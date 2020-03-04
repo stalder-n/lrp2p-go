@@ -39,11 +39,6 @@ func (suite *SegmentTestSuite) TestGetExpectedSequenceNumber() {
 	suite.Equal(uint32(100), c.getExpectedSequenceNumber())
 }
 
-func (suite *SegmentTestSuite) Test_uint32ToBytes() {
-	test := uint32ToBytes(0)
-	suite.Equal(4, len(test))
-}
-
 func (suite *SegmentTestSuite) TestCreateAckSegment() {
 	segs := make([]*segment, 0, 3)
 	segs = append(segs, createFlaggedSegment(2, 0, []byte{}))
