@@ -63,10 +63,11 @@ func (arq *selectiveArq) handleAck(seg *segment) {
 	// TODO
 }
 
-func (arq *selectiveArq) writeAck() {
+func (arq *selectiveArq) writeAck(timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
-	// TODO
+	ack := createAckSegment(arq.nextExpectedSequenceNumber-1, arq.segmentBuffer)
+	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
 }
 
 func (arq *selectiveArq) hasAvailableSegments() bool {
@@ -77,6 +78,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	if arq.hasAvailableSegments() {
 		var seg *segment
 		seg, arq.segmentBuffer = popSegment(arq.segmentBuffer)
+		arq.nextExpectedSequenceNumber++
 		copy(buffer, seg.data)
 		return success, len(seg.data), nil
 	}
@@ -99,11 +101,16 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	}
 
 	if seg.getSequenceNumber() < arq.nextExpectedSequenceNumber {
-		arq.writeAck()
+		arq.writeAck(timestamp)
 		return invalidSegment, 0, err
+	} else if seg.getSequenceNumber() > arq.nextExpectedSequenceNumber {
+		insertSegmentInOrder(arq.segmentBuffer, seg)
+		arq.writeAck(timestamp)
+		return invalidSegment, 0, err
+	} else {
+		arq.nextExpectedSequenceNumber++
 	}
-	insertSegmentInOrder(arq.segmentBuffer, seg)
-	arq.writeAck()
+	arq.writeAck(timestamp)
 	copy(buffer, seg.data)
 	return success, len(seg.data), err
 }
