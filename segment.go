@@ -146,6 +146,36 @@ func createAckSegment(sequenceNumber uint32, segmentBuffer []*segment) *segment 
 	return createFlaggedSegment(sequenceNumber, flagACK, data)
 }
 
+func ackSegmentToSequenceNumbers(ack *segment) []uint32 {
+	segs := make([]uint32, 0)
+	if !ack.isFlaggedAs(flagACK) {
+		return segs
+	}
+	segs = append(segs, ack.getSequenceNumber())
+	if len(ack.data) <= 1 {
+		return segs
+	}
+
+	delim := ackDelimSeq
+	for i := 0; delim != ackDelimEnd && i < len(ack.data); i++ {
+		switch delim {
+		case ackDelimSeq:
+			sequenceNum := bytesToUint32(ack.data[i : i+4])
+			segs = append(segs, sequenceNum)
+			i += 4
+		case ackDelimRange:
+			to := bytesToUint32(ack.data[i : i+4])
+			i += 4
+			for current := segs[len(segs)-1] + 1; current <= to; current++ {
+				segs = append(segs, current)
+			}
+		}
+		delim = ack.data[i]
+	}
+
+	return segs
+}
+
 func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
 	var next = currentIndex + getDataChunkSize()
 	var flag byte = 0

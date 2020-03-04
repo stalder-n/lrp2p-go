@@ -54,7 +54,7 @@ func (suite *SegmentTestSuite) TestCreateAckSegment() {
 }
 
 func (suite *SegmentTestSuite) TestCreateAckSegmentWithRanges() {
-	segs := make([]*segment, 0, 3)
+	segs := make([]*segment, 0, 5)
 	segs = append(segs, createFlaggedSegment(2, 0, []byte{}))
 	segs = append(segs, createFlaggedSegment(3, 0, []byte{}))
 	segs = append(segs, createFlaggedSegment(5, 0, []byte{}))
@@ -69,7 +69,7 @@ func (suite *SegmentTestSuite) TestCreateAckSegmentWithRanges() {
 }
 
 func (suite *SegmentTestSuite) TestCreateComplexAckSegment() {
-	segs := make([]*segment, 0, 3)
+	segs := make([]*segment, 0, 9)
 	segs = append(segs, createFlaggedSegment(2, 0, []byte{}))
 	segs = append(segs, createFlaggedSegment(4, 0, []byte{}))
 	segs = append(segs, createFlaggedSegment(5, 0, []byte{}))
@@ -88,6 +88,47 @@ func (suite *SegmentTestSuite) TestCreateComplexAckSegment() {
 		0, 0, 0, 9, ackDelimSeq,
 		0, 0, 0, 11, ackDelimSeq,
 		0, 0, 0, 13, ackDelimRange, 0, 0, 0, 14, ackDelimEnd}, ack.data)
+}
+
+func (suite *SegmentTestSuite) TestCreateEmptyAckSegment() {
+	segs := make([]*segment, 0)
+	ack := createAckSegment(1, segs)
+	suite.Len(ack.data, 1)
+	suite.EqualValues([]byte{ackDelimEnd}, ack.data)
+}
+
+func (suite *SegmentTestSuite) TestAckToSequenceNums() {
+	ack := createFlaggedSegment(1, flagACK, []byte{
+		0, 0, 0, 2, ackDelimSeq,
+		0, 0, 0, 4, ackDelimSeq,
+		0, 0, 0, 6, ackDelimEnd})
+	nums := ackSegmentToSequenceNumbers(ack)
+	suite.EqualValues([]uint32{1, 2, 4, 6}, nums)
+}
+
+func (suite *SegmentTestSuite) TestAckWithRangesToSequenceNums() {
+	ack := createFlaggedSegment(1, flagACK, []byte{
+		0, 0, 0, 2, ackDelimRange, 0, 0, 0, 3, ackDelimSeq,
+		0, 0, 0, 5, ackDelimRange, 0, 0, 0, 7, ackDelimEnd})
+	nums := ackSegmentToSequenceNumbers(ack)
+	suite.EqualValues([]uint32{1, 2, 3, 5, 6, 7}, nums)
+}
+
+func (suite *SegmentTestSuite) TestComplexAckToSequenceNums() {
+	ack := createFlaggedSegment(1, flagACK, []byte{
+		0, 0, 0, 2, ackDelimSeq,
+		0, 0, 0, 4, ackDelimRange, 0, 0, 0, 7, ackDelimSeq,
+		0, 0, 0, 9, ackDelimSeq,
+		0, 0, 0, 11, ackDelimSeq,
+		0, 0, 0, 13, ackDelimRange, 0, 0, 0, 14, ackDelimEnd})
+	nums := ackSegmentToSequenceNumbers(ack)
+	suite.EqualValues([]uint32{1, 2, 4, 5, 6, 7, 9, 11, 13, 14}, nums)
+}
+
+func (suite *SegmentTestSuite) TestEmptyAckToSequenceNums() {
+	ack := createFlaggedSegment(1, flagACK, []byte{ackDelimEnd})
+	nums := ackSegmentToSequenceNumbers(ack)
+	suite.EqualValues([]uint32{1}, nums)
 }
 
 func TestSegment(t *testing.T) {
