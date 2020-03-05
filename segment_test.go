@@ -176,6 +176,19 @@ func (suite *SegmentTestSuite) TestRemoveSegment() {
 	suite.Nil(removed)
 }
 
+func (suite *SegmentTestSuite) TestRemoveSegmentsAllWhere() {
+	seg1 := createFlaggedSegment(1, 0, nil)
+	seg3 := createFlaggedSegment(3, 0, nil)
+	seg5 := createFlaggedSegment(5, 0, nil)
+	seg7 := createFlaggedSegment(7, 0, nil)
+	segs := []*segment{seg1, seg3, seg5, seg7}
+	removed, segs := removeAllSegmentsWhere(segs, func(seg *segment) bool {
+		return seg.getSequenceNumber() < 5
+	})
+	suite.EqualValues(segs, []*segment{seg5, seg7})
+	suite.EqualValues(removed, []*segment{seg1, seg3})
+}
+
 func TestSegment(t *testing.T) {
 	suite.Run(t, &SegmentTestSuite{})
 }

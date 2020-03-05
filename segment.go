@@ -221,6 +221,19 @@ func removeSegment(segments []*segment, sequenceNumber uint32) (*segment, []*seg
 	return nil, segments
 }
 
+func removeAllSegmentsWhere(segments []*segment, condition func(*segment) bool) (removed []*segment, orig []*segment) {
+	removed = make([]*segment, 0, len(segments))
+	for i := 0; i < len(segments); i++ {
+		seg := segments[i]
+		if condition(seg) {
+			segments = append(segments[:i], segments[i+1:]...)
+			removed = append(removed, seg)
+			i--
+		}
+	}
+	return removed, segments
+}
+
 func popSegment(segments []*segment) (*segment, []*segment) {
 	return segments[0], segments[1:]
 }
