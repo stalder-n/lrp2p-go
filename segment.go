@@ -13,6 +13,10 @@ const (
 	ackDelimEnd   byte = 4
 )
 
+var dataOffsetPosition = position{0, 1}
+var flagPosition = position{1, 2}
+var sequenceNumberPosition = position{2, 6}
+
 func getDataChunkSize() int {
 	return segmentMtu - headerLength
 }
