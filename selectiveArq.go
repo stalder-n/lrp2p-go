@@ -35,7 +35,7 @@ type selectiveArq struct {
 
 	// sender
 	currentSequenceNumber uint32
-	sendQueue             []*segment
+	writeQueue            []*segment
 	waitingForAck         []*segment
 	sendSynFlag           bool
 }
@@ -47,7 +47,7 @@ func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors c
 		nextExpectedSequenceNumber: 0,
 		segmentBuffer:              make([]*segment, 0),
 		currentSequenceNumber:      initialSequenceNumber,
-		sendQueue:                  make([]*segment, 0),
+		writeQueue:                 make([]*segment, 0),
 		waitingForAck:              make([]*segment, 0),
 		sendSynFlag:                true,
 	}
@@ -59,14 +59,31 @@ func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
 	return result
 }
 
-func (arq *selectiveArq) handleAck(seg *segment) {
-	// TODO
+func (arq *selectiveArq) handleAck(ack *segment, timestamp time.Time) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
+
+	nums := ackSegmentToSequenceNumbers(ack)
+	for _, num := range nums {
+		_, arq.waitingForAck = removeSegment(arq.waitingForAck, num)
+	}
+
+	var removed []*segment
+	removed, arq.waitingForAck = removeAllSegmentsWhere(arq.waitingForAck, func(seg *segment) bool {
+		return seg.getSequenceNumber() < nums[len(nums)-1]
+	})
+
+	for _, seg := range removed {
+		arq.writeQueue = insertSegmentInOrder(arq.writeQueue, seg)
+	}
+	_, _, _ = arq.writeQueuedSegments(timestamp)
 }
 
 func (arq *selectiveArq) writeAck(timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
 	ack := createAckSegment(arq.nextExpectedSequenceNumber-1, arq.segmentBuffer)
+	ack.timestamp = timestamp
 	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
 }
 
@@ -83,21 +100,22 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 		return success, len(seg.data), nil
 	}
 	buf := make([]byte, len(buffer))
-	status, _, err := arq.extension.Read(buf, timestamp)
+	status, n, err := arq.extension.Read(buf, timestamp)
 
 	if status != success {
 		return status, 0, err
 	}
 
 	seg := createSegment(buf)
+	if seg.isFlaggedAs(flagACK) {
+		arq.handleAck(seg, timestamp)
+		return ackReceived, 0, err
+	}
+	
 	if arq.nextExpectedSequenceNumber == 0 && !seg.isFlaggedAs(flagSYN) {
 		return fail, 0, err
 	} else if arq.nextExpectedSequenceNumber == 0 {
 		arq.nextExpectedSequenceNumber = seg.getSequenceNumber()
-	}
-	if seg.isFlaggedAs(flagACK) {
-		arq.handleAck(seg)
-		return ackReceived, 0, err
 	}
 
 	if seg.getSequenceNumber() < arq.nextExpectedSequenceNumber {
@@ -112,7 +130,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	}
 	arq.writeAck(timestamp)
 	copy(buffer, seg.data)
-	return success, len(seg.data), err
+	return success, n - headerLength, err
 }
 
 func (arq *selectiveArq) getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
@@ -132,7 +150,7 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 	currentIndex := 0
 	for {
 		currentIndex, seg := getNextSegmentInBuffer(currentIndex, arq.getAndIncrementCurrentSequenceNumber(), buffer)
-		arq.sendQueue = append(arq.sendQueue, seg)
+		arq.writeQueue = append(arq.writeQueue, seg)
 		if currentIndex >= len(buffer) {
 			break
 		}
@@ -141,13 +159,14 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
-	for len(arq.sendQueue) > 0 {
-		seg := arq.sendQueue[0]
+	for len(arq.writeQueue) > 0 {
+		seg := arq.writeQueue[0]
 		statusCode, _, err := arq.extension.Write(seg.buffer, timestamp)
+		seg.timestamp = timestamp
 		if statusCode != success {
 			return statusCode, sumN, err
 		}
-		_, arq.sendQueue = popSegment(arq.sendQueue)
+		_, arq.writeQueue = popSegment(arq.writeQueue)
 		insertSegmentInOrder(arq.waitingForAck, seg)
 		sumN += len(seg.data)
 	}
