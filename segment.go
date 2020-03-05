@@ -196,3 +196,31 @@ func hasSegmentTimedOut(seg *segment, timestamp time.Time) bool {
 	timeout := seg.timestamp.Add(retransmissionTimeout)
 	return timestamp.After(timeout)
 }
+
+func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
+	for i, seg := range segments {
+		if insert.getSequenceNumber() < seg.getSequenceNumber() {
+			segments = append(segments, nil)
+			copy(segments[i+1:], segments[i:])
+			segments[i] = insert
+			return segments
+		}
+		if insert.getSequenceNumber() == seg.getSequenceNumber() {
+			return segments
+		}
+	}
+	return append(segments, insert)
+}
+
+func removeSegment(segments []*segment, sequenceNumber uint32) (*segment, []*segment) {
+	for i, seg := range segments {
+		if seg.getSequenceNumber() == sequenceNumber {
+			return seg, append(segments[:i], segments[i+1:]...)
+		}
+	}
+	return nil, segments
+}
+
+func popSegment(segments []*segment) (*segment, []*segment) {
+	return segments[0], segments[1:]
+}
