@@ -1,7 +1,6 @@
 package atp
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
@@ -53,41 +52,4 @@ func (suite *ArqTestSuite) TearDownTest() {
 
 func TestSelectiveRepeatArq(t *testing.T) {
 	suite.Run(t, new(ArqTestSuite))
-}
-
-func TestInsert(t *testing.T) {
-	s1 := createFlaggedSegment(1, 0, []byte{})
-	s2 := createFlaggedSegment(2, 0, []byte{})
-	s3 := createFlaggedSegment(3, 0, []byte{})
-
-	segs := make([]*segment, 0)
-
-	segs = insertSegmentInOrder(segs, s2)
-	fmt.Print("[ ")
-	for _, seg := range segs {
-		fmt.Print(seg.getSequenceNumber(), " ")
-	}
-	fmt.Println("]")
-
-	segs = insertSegmentInOrder(segs, s3)
-	fmt.Print("[ ")
-	for _, seg := range segs {
-		fmt.Print(seg.getSequenceNumber(), " ")
-	}
-	fmt.Println("]")
-
-	segs = insertSegmentInOrder(segs, s1)
-	fmt.Print("[ ")
-	for _, seg := range segs {
-		fmt.Print(seg.getSequenceNumber(), " ")
-	}
-	fmt.Println("]")
-
-	_, segs = removeSegment(segs, 1)
-	fmt.Print("[ ")
-	for _, seg := range segs {
-		fmt.Print(seg.getSequenceNumber(), " ")
-	}
-	fmt.Println("]")
-
 }
