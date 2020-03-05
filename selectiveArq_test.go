@@ -32,16 +32,11 @@ func (suite *ArqTestSuite) SetupTest() {
 	segmentMtu = headerLength + 8
 }
 
-func (suite *ArqTestSuite) TestSendText() {
+func (suite *ArqTestSuite) TestSimpleWrite() {
 	now := time.Now()
-	status, _, err := suite.alphaArq.Write([]byte("12345678"), now)
-	suite.Nil(err)
-	suite.Equal(success, status)
-
-	buffer := make([]byte, 20)
-	status, _, err = suite.betaArq.Read(buffer, now)
-	suite.Nil(err)
-	suite.Equal(success, status)
+	suite.write(suite.alphaArq, "12345678", now)
+	suite.read(suite.betaArq, "12345678", now)
+	suite.readAck(suite.alphaArq, now)
 }
 
 func (suite *ArqTestSuite) TearDownTest() {
