@@ -8,9 +8,10 @@ import (
 var segmentMtu = defaultMTU
 
 const (
-	ackDelimSeq   byte = 1
-	ackDelimRange byte = 2
-	ackDelimEnd   byte = 4
+	ackDelimStart byte = 1
+	ackDelimSeq   byte = 2
+	ackDelimRange byte = 4
+	ackDelimEnd   byte = 8
 )
 
 var dataOffsetPosition = position{0, 1}
@@ -71,6 +72,10 @@ func (seg *segment) getDataAsString() string {
 	return string(seg.data)
 }
 
+func (seg *segment) hasTimedOut(timestamp time.Time) bool {
+	return timestamp.After(seg.timestamp.Add(retransmissionTimeout))
+}
+
 func setDataOffset(buffer []byte, dataOffset byte) {
 	buffer[dataOffsetPosition.Start] = dataOffset
 }
@@ -105,41 +110,44 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segme
 	return createSegment(buffer)
 }
 
-func isInSequence(seg1, seg2 *segment) bool {
-	return seg1.getSequenceNumber()+1 == seg2.getSequenceNumber()
+func isInSequence(seg1, seg2 uint32) bool {
+	return seg1+1 == seg2
 }
 
-func createAckSegment(sequenceNumber uint32, segmentBuffer []*segment) *segment {
+func createAckSegment(sequenceNumber uint32, numBuffer []uint32) *segment {
 	data := make([]byte, 0, segmentMtu)
-	var prevSeg *segment
+	var prevNum uint32
 	var lastDelim byte = 0
+	if len(numBuffer) > 0 {
+		data = append(data, ackDelimStart)
+	}
 
-	for _, seg := range segmentBuffer {
+	for _, num := range numBuffer {
 		switch lastDelim {
 		case ackDelimSeq:
-			if isInSequence(prevSeg, seg) {
+			if isInSequence(prevNum, num) {
 				data[len(data)-1] = ackDelimRange
-				data = append(data, seg.sequenceNumber...)
+				data = append(data, uint32ToBytes(num)...)
 				lastDelim = ackDelimRange
 			} else {
-				data = append(data, seg.sequenceNumber...)
+				data = append(data, uint32ToBytes(num)...)
 				data = append(data, ackDelimSeq)
 			}
 		case ackDelimRange:
-			if isInSequence(prevSeg, seg) {
-				copy(data[len(data)-4:], seg.sequenceNumber)
+			if isInSequence(prevNum, num) {
+				copy(data[len(data)-4:], uint32ToBytes(num))
 			} else {
 				data = append(data, ackDelimSeq)
-				data = append(data, seg.sequenceNumber...)
+				data = append(data, uint32ToBytes(num)...)
 				data = append(data, ackDelimSeq)
 				lastDelim = ackDelimSeq
 			}
 		default:
-			data = append(data, seg.sequenceNumber...)
+			data = append(data, uint32ToBytes(num)...)
 			data = append(data, ackDelimSeq)
 			lastDelim = ackDelimSeq
 		}
-		prevSeg = seg
+		prevNum = num
 	}
 	if lastDelim == ackDelimSeq {
 		data[len(data)-1] = ackDelimEnd
@@ -156,12 +164,12 @@ func ackSegmentToSequenceNumbers(ack *segment) []uint32 {
 		return segs
 	}
 	segs = append(segs, ack.getSequenceNumber())
-	if len(ack.data) <= 1 {
+	if ack.data[0] == ackDelimEnd {
 		return segs
 	}
 
 	delim := ackDelimSeq
-	for i := 0; delim != ackDelimEnd && i < len(ack.data); i++ {
+	for i := 1; delim != ackDelimEnd && i < len(ack.data); i++ {
 		switch delim {
 		case ackDelimSeq:
 			sequenceNum := bytesToUint32(ack.data[i : i+4])
@@ -192,15 +200,6 @@ func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte)
 	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
 }
 
-func hasSegmentTimedOut(seg *segment, timestamp time.Time) bool {
-	if seg == nil {
-		return false
-	}
-
-	timeout := seg.timestamp.Add(retransmissionTimeout)
-	return timestamp.After(timeout)
-}
-
 func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
 	for i, seg := range segments {
 		if insert.getSequenceNumber() < seg.getSequenceNumber() {
@@ -214,6 +213,21 @@ func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
 		}
 	}
 	return append(segments, insert)
+}
+
+func insertUin32InOrder(nums []uint32, insert uint32) []uint32 {
+	for i, num := range nums {
+		if insert < num {
+			nums = append(nums, 0)
+			copy(nums[i+1:], nums[i:])
+			nums[i] = insert
+			return nums
+		}
+		if insert == num {
+			return nums
+		}
+	}
+	return append(nums, insert)
 }
 
 func removeSegment(segments []*segment, sequenceNumber uint32) (*segment, []*segment) {
@@ -240,4 +254,8 @@ func removeAllSegmentsWhere(segments []*segment, condition func(*segment) bool) 
 
 func popSegment(segments []*segment) (*segment, []*segment) {
 	return segments[0], segments[1:]
+}
+
+func popUint32(nums []uint32) (uint32, []uint32) {
+	return nums[0], nums[1:]
 }

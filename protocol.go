@@ -32,6 +32,7 @@ const (
 	waitingForHandshake
 	invalidNonce
 	timeout
+	connectionClosed
 )
 
 type position struct {
@@ -91,6 +92,7 @@ type udpConnector struct {
 }
 
 const timeoutErrorString = "i/o timeout"
+const connectionClosedErrorString = "use of closed network connection"
 
 func udpListen(localPort int, errorChannel chan error) (*udpConnector, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
@@ -153,6 +155,8 @@ func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusC
 		case *net.OpError:
 			if err.(*net.OpError).Err.Error() == timeoutErrorString {
 				return timeout, n, nil
+			} else if err.(*net.OpError).Err.Error() == connectionClosedErrorString {
+				return connectionClosed, 0, nil
 			}
 		}
 		return fail, n, err
@@ -277,6 +281,8 @@ func (socket *Socket) read() {
 		case ackReceived:
 		case invalidNonce:
 		case invalidSegment:
+		case connectionClosed:
+			return
 		}
 	}
 }

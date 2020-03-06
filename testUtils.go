@@ -1,19 +1,23 @@
 package atp
 
 import (
-	"container/list"
 	"github.com/stretchr/testify/suite"
 	"time"
 )
 
 type atpTestSuite struct {
 	suite.Suite
+	timestamp time.Time
 }
 
 var testErrorChannel chan error
 
 func init() {
 	testErrorChannel = make(chan error, 100)
+}
+
+func (suite *atpTestSuite) timeout() time.Time {
+	return suite.timestamp.Add(arqTimeout)
 }
 
 func (suite *atpTestSuite) handleTestError(err error) {
@@ -54,7 +58,7 @@ func (suite *atpTestSuite) readAck(c connector, timestamp time.Time) {
 
 type segmentManipulator struct {
 	savedSegments map[uint32][]byte
-	toDropOnce    list.List
+	toDropOnce    []uint32
 	extension     connector
 }
 
@@ -75,14 +79,15 @@ func (manipulator *segmentManipulator) AddExtension(connector connector) {
 }
 
 func (manipulator *segmentManipulator) DropOnce(sequenceNumber uint32) {
-	manipulator.toDropOnce.PushFront(sequenceNumber)
+	manipulator.toDropOnce = append(manipulator.toDropOnce, sequenceNumber)
 }
 
 func (manipulator *segmentManipulator) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	seg := createSegment(buffer)
-	for elem := manipulator.toDropOnce.Front(); elem != nil; elem = elem.Next() {
-		if elem.Value.(uint32) == seg.getSequenceNumber() {
-			manipulator.toDropOnce.Remove(elem)
+	for i := 0; i < len(manipulator.toDropOnce); i++ {
+		if manipulator.toDropOnce[i] == seg.getSequenceNumber() {
+			manipulator.toDropOnce = append(manipulator.toDropOnce[:i], manipulator.toDropOnce[i+1:]...)
+			i--
 			return success, len(buffer), nil
 		}
 	}

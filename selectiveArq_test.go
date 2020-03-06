@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+func repeatDataSize(s string, n int) string {
+	return strings.Repeat(s, n*getDataChunkSize())
+}
+
 type ArqTestSuite struct {
 	atpTestSuite
 	alphaArq, betaArq                 *selectiveArq
@@ -14,22 +18,25 @@ type ArqTestSuite struct {
 }
 
 func newMockSelectiveRepeatArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
-	manipulator := &segmentManipulator{extension: connector}
+	manipulator := &segmentManipulator{extension: connector, toDropOnce: make([]uint32, 0)}
 	arq := newSelectiveArq(1, manipulator, testErrorChannel)
 	return arq, manipulator
 }
 
 func (suite *ArqTestSuite) SetupTest() {
+	suite.timestamp = time.Now()
 	endpoint1, endpoint2 := make(chan []byte, 100), make(chan []byte, 100)
-	connector1, connector2 := &channelConnector{
-		in:  endpoint1,
-		out: endpoint2,
+	connection1, connection2 := &channelConnector{
+		in:            endpoint1,
+		out:           endpoint2,
+		artificialNow: suite.timestamp,
 	}, &channelConnector{
-		in:  endpoint2,
-		out: endpoint1,
+		in:            endpoint2,
+		out:           endpoint1,
+		artificialNow: suite.timestamp,
 	}
-	suite.alphaArq, suite.alphaManipulator = newMockSelectiveRepeatArqConnection(connector1, "alpha")
-	suite.betaArq, suite.betaManipulator = newMockSelectiveRepeatArqConnection(connector2, "beta")
+	suite.alphaArq, suite.alphaManipulator = newMockSelectiveRepeatArqConnection(connection1, "alpha")
+	suite.betaArq, suite.betaManipulator = newMockSelectiveRepeatArqConnection(connection2, "beta")
 	segmentMtu = headerLength + 32
 }
 
@@ -40,25 +47,23 @@ func (suite *ArqTestSuite) TearDownTest() {
 }
 
 func (suite *ArqTestSuite) TestSimpleWrite() {
-	now := time.Now()
-	suite.write(suite.alphaArq, repeatDataSize("A", 1), now)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), now)
-	suite.readAck(suite.alphaArq, now)
+	suite.betaArq.ackThreshold = 1
+	suite.write(suite.alphaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
 func (suite *ArqTestSuite) TestWriteTwoSegments() {
-	now := time.Now()
-	suite.write(suite.alphaArq, repeatDataSize("A", 2), now)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), now)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), now)
-	suite.readAck(suite.alphaArq, now)
-	suite.readAck(suite.alphaArq, now)
+	suite.betaArq.ackThreshold = 2
+	suite.write(suite.alphaArq, repeatDataSize("A", 2), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
 func TestSelectiveRepeatArq(t *testing.T) {
 	suite.Run(t, new(ArqTestSuite))
-}
-
-func repeatDataSize(s string, n int) string {
-	return strings.Repeat(s, n*getDataChunkSize())
 }
