@@ -2,6 +2,7 @@ package atp
 
 import (
 	"github.com/stretchr/testify/suite"
+	"strings"
 	"testing"
 	"time"
 )
@@ -29,14 +30,7 @@ func (suite *ArqTestSuite) SetupTest() {
 	}
 	suite.alphaArq, suite.alphaManipulator = newMockSelectiveRepeatArqConnection(connector1, "alpha")
 	suite.betaArq, suite.betaManipulator = newMockSelectiveRepeatArqConnection(connector2, "beta")
-	segmentMtu = headerLength + 8
-}
-
-func (suite *ArqTestSuite) TestSimpleWrite() {
-	now := time.Now()
-	suite.write(suite.alphaArq, "12345678", now)
-	suite.read(suite.betaArq, "12345678", now)
-	suite.readAck(suite.alphaArq, now)
+	segmentMtu = headerLength + 32
 }
 
 func (suite *ArqTestSuite) TearDownTest() {
@@ -45,6 +39,26 @@ func (suite *ArqTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaArq.Close())
 }
 
+func (suite *ArqTestSuite) TestSimpleWrite() {
+	now := time.Now()
+	suite.write(suite.alphaArq, repeatDataSize("A", 1), now)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), now)
+	suite.readAck(suite.alphaArq, now)
+}
+
+func (suite *ArqTestSuite) TestWriteTwoSegments() {
+	now := time.Now()
+	suite.write(suite.alphaArq, repeatDataSize("A", 2), now)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), now)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), now)
+	suite.readAck(suite.alphaArq, now)
+	suite.readAck(suite.alphaArq, now)
+}
+
 func TestSelectiveRepeatArq(t *testing.T) {
 	suite.Run(t, new(ArqTestSuite))
+}
+
+func repeatDataSize(s string, n int) string {
+	return strings.Repeat(s, n*getDataChunkSize())
 }

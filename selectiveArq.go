@@ -111,7 +111,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 		arq.handleAck(seg, timestamp)
 		return ackReceived, 0, err
 	}
-	
+
 	if arq.nextExpectedSequenceNumber == 0 && !seg.isFlaggedAs(flagSYN) {
 		return fail, 0, err
 	} else if arq.nextExpectedSequenceNumber == 0 {
@@ -147,9 +147,10 @@ func (arq *selectiveArq) getNextSegmentInBuffer(currentIndex int, sequenceNum ui
 }
 
 func (arq *selectiveArq) queueNewSegments(buffer []byte) {
+	var seg *segment
 	currentIndex := 0
 	for {
-		currentIndex, seg := getNextSegmentInBuffer(currentIndex, arq.getAndIncrementCurrentSequenceNumber(), buffer)
+		currentIndex, seg = getNextSegmentInBuffer(currentIndex, arq.getAndIncrementCurrentSequenceNumber(), buffer)
 		arq.writeQueue = append(arq.writeQueue, seg)
 		if currentIndex >= len(buffer) {
 			break
