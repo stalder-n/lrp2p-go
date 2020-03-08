@@ -172,9 +172,6 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 }
 
 func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
-	arq.writeMutex.Lock()
-	defer arq.writeMutex.Unlock()
-
 	removed := make([]*segment, 0, len(arq.waitingForAck))
 	removed, arq.waitingForAck = removeAllSegmentsWhere(arq.waitingForAck, func(seg *segment) bool {
 		return seg.hasTimedOut(timestamp)
