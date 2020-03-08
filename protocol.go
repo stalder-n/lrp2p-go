@@ -260,7 +260,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	return n, err
 }
 
-// SetReadTimeout sets an idle timeout for read all operations
+// SetReadTimeout sets an idle timeout for read operations
 func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 	socket.connection.SetReadTimeout(timeout)
 }

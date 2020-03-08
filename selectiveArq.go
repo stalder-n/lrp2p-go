@@ -171,7 +171,7 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 	}
 }
 
-func (arq *selectiveArq) retransmitTimedOutSegments(timestamp time.Time) {
+func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
 
@@ -182,7 +182,6 @@ func (arq *selectiveArq) retransmitTimedOutSegments(timestamp time.Time) {
 	for _, seg := range removed {
 		arq.writeQueue = insertSegmentInOrder(arq.writeQueue, seg)
 	}
-	_, _, _ = arq.writeQueuedSegments(timestamp)
 }
 
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
@@ -205,7 +204,10 @@ func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, 
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
 
-	arq.queueNewSegments(buffer)
+	arq.requeueTimedOutSegments(timestamp)
+	if len(buffer) > 0 {
+		arq.queueNewSegments(buffer)
+	}
 	return arq.writeQueuedSegments(timestamp)
 }
 
