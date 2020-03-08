@@ -64,6 +64,17 @@ func (suite *ArqTestSuite) TestWriteTwoSegments() {
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
+func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
+	suite.betaArq.ackThreshold = 3
+	suite.write(suite.alphaArq, repeatDataSize("A", 2), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
+}
+
 func TestSelectiveRepeatArq(t *testing.T) {
 	suite.Run(t, new(ArqTestSuite))
 }

@@ -127,7 +127,9 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 		arq.queuedForAck = insertUin32InOrder(arq.queuedForAck, receivedSeg.getSequenceNumber())
 		arq.segsSinceLastAck++
 	case timeout:
-		arq.writeAck(timestamp)
+		if arq.nextExpectedSequenceNumber > 0 {
+			arq.writeAck(timestamp)
+		}
 	default:
 		return status, 0, err
 	}
