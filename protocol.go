@@ -95,8 +95,8 @@ const timeoutErrorString = "i/o timeout"
 const connectionClosedErrorString = "use of closed network connection"
 
 func udpListen(localPort int, errorChannel chan error) (*udpConnector, error) {
-	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
-	connection, err := net.ListenUDP("udp", remoteAddr)
+	localAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
+	connection, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
 		return nil, err
 	}
