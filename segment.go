@@ -188,18 +188,6 @@ func ackSegmentToSequenceNumbers(ack *segment) []uint32 {
 	return segs
 }
 
-func getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
-	var next = currentIndex + getDataChunkSize()
-	var flag byte = 0
-	if currentIndex == 0 {
-		flag |= flagSYN
-	}
-	if next >= len(buffer) {
-		next = len(buffer)
-	}
-	return next, createFlaggedSegment(sequenceNum, flag, buffer[currentIndex:next])
-}
-
 func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
 	for i, seg := range segments {
 		if insert.getSequenceNumber() < seg.getSequenceNumber() {

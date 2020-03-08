@@ -163,7 +163,7 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 	var seg *segment
 	currentIndex := 0
 	for {
-		currentIndex, seg = getNextSegmentInBuffer(currentIndex, arq.getAndIncrementCurrentSequenceNumber(), buffer)
+		currentIndex, seg = arq.getNextSegmentInBuffer(currentIndex, arq.getAndIncrementCurrentSequenceNumber(), buffer)
 		arq.writeQueue = append(arq.writeQueue, seg)
 		if currentIndex >= len(buffer) {
 			break
@@ -182,6 +182,7 @@ func (arq *selectiveArq) retransmitTimedOutSegments(timestamp time.Time) {
 	for _, seg := range removed {
 		arq.writeQueue = insertSegmentInOrder(arq.writeQueue, seg)
 	}
+	_, _, _ = arq.writeQueuedSegments(timestamp)
 }
 
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
