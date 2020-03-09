@@ -72,7 +72,7 @@ type connector interface {
 	reportError(error)
 }
 
-func connect(connector connector, errors chan error) connector {
+func connect(connector connector, errors chan error) *selectiveArq {
 	sec := newSecurityExtension(connector, nil, nil, errors)
 	arq := newSelectiveArq(generateRandomSequenceNumber(), sec, errors)
 	return arq
@@ -175,7 +175,7 @@ func (connector *udpConnector) reportError(err error) {
 // Socket is an ATP Socket that can open a two-way connection to
 // another Socket. Use atp.SocketConnect to create an instance.
 type Socket struct {
-	connection    connector
+	connection    *selectiveArq
 	readBuffer    bytes.Buffer
 	dataAvailable *sync.Cond
 	isReading     bool

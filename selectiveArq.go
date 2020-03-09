@@ -40,10 +40,12 @@ type selectiveArq struct {
 	currentSequenceNumber uint32
 	writeQueue            []*segment
 	waitingForAck         []*segment
+	windowSize            int
 	sendSynFlag           bool
 }
 
 const defaultArqTimeout = 50 * time.Millisecond
+const defaultInitialWindowSize = 20
 
 var arqTimeout = defaultArqTimeout
 
@@ -59,6 +61,7 @@ func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors c
 		currentSequenceNumber:      initialSequenceNumber,
 		writeQueue:                 make([]*segment, 0),
 		waitingForAck:              make([]*segment, 0),
+		windowSize:                 defaultInitialWindowSize,
 		sendSynFlag:                true,
 	}
 }
@@ -184,6 +187,9 @@ func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
 	for len(arq.writeQueue) > 0 {
+		if len(arq.waitingForAck) >= arq.windowSize {
+			return windowFull, sumN, nil
+		}
 		seg := arq.writeQueue[0]
 		statusCode, _, err := arq.extension.Write(seg.buffer, timestamp)
 		seg.timestamp = timestamp
