@@ -100,6 +100,23 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnAck() {
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
+func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
+	suite.betaArq.ackThreshold = 1
+	suite.alphaManipulator.DropOnce(2)
+	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Len(suite.alphaArq.waitingForAck, 1)
+
+	suite.write(suite.alphaArq, "", suite.timestamp.Add(retransmissionTimeout+1))
+	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+
+	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
+}
+
 func TestSelectiveRepeatArq(t *testing.T) {
 	suite.Run(t, new(ArqTestSuite))
 }
