@@ -26,7 +26,6 @@ const (
 	success statusCode = iota
 	fail
 	ackReceived
-	pendingSegments
 	invalidSegment
 	windowFull
 	waitingForHandshake
@@ -234,10 +233,6 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 		case windowFull:
 			time.Sleep(retryTimeout)
 			statusCode, n, err = socket.connection.Write(nil, time.Now())
-			sumN += n
-		case pendingSegments:
-			time.Sleep(retryTimeout)
-			statusCode, n, err = socket.connection.Write(buffer, time.Now())
 			sumN += n
 		}
 	}
