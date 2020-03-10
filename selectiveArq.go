@@ -57,7 +57,7 @@ func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors c
 		nextExpectedSequenceNumber: 0,
 		ackThreshold:               5,
 		segmentBuffer:              make([]*segment, 0),
-		queuedForAck:               make([]uint32, 5),
+		queuedForAck:               make([]uint32, 0),
 		currentSequenceNumber:      initialSequenceNumber,
 		writeQueue:                 make([]*segment, 0),
 		waitingForAck:              make([]*segment, 0),
@@ -112,7 +112,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 
 	switch status {
 	case success:
-		receivedSeg := createSegment(buf)
+		receivedSeg := createSegment(buf[:n])
 		if receivedSeg.isFlaggedAs(flagACK) {
 			arq.handleAck(receivedSeg, timestamp)
 			return ackReceived, 0, err
@@ -130,7 +130,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 		arq.queuedForAck = insertUin32InOrder(arq.queuedForAck, receivedSeg.getSequenceNumber())
 		arq.segsSinceLastAck++
 	case timeout:
-		if arq.nextExpectedSequenceNumber > 0 {
+		if arq.nextExpectedSequenceNumber > 0 && arq.segsSinceLastAck > 0 {
 			arq.writeAck(timestamp)
 		}
 	default:
@@ -144,7 +144,12 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 			arq.writeAck(timestamp)
 		}
 		copy(buffer, seg.data)
-		return success, n - headerLength, err
+		return success, len(seg.data), err
+	} else if status == success {
+		if arq.segsSinceLastAck >= arq.ackThreshold {
+			arq.writeAck(timestamp)
+		}
+		return invalidSegment, 0, err
 	}
 	return status, 0, err
 }

@@ -41,8 +41,8 @@ func (suite *atpTestSuite) read(c connector, expected string, timestamp time.Tim
 	readBuffer := make([]byte, segmentMtu)
 	status, n, err := c.Read(readBuffer, timestamp)
 	suite.handleTestError(err)
-	suite.Equal(expected, string(readBuffer[:n]))
 	suite.Equal(success, status)
+	suite.Equal(expected, string(readBuffer[:n]))
 }
 
 func (suite *atpTestSuite) readExpectStatus(c connector, expected statusCode, timestamp time.Time) {

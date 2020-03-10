@@ -7,8 +7,12 @@ import (
 	"time"
 )
 
-func repeatDataSize(s string, n int) string {
-	return strings.Repeat(s, n*getDataChunkSize())
+func repeatDataSize(s int, n int) string {
+	str := ""
+	for i := 0; i < n; i++ {
+		str += strings.Repeat(string(s+i), getDataChunkSize())
+	}
+	return str
 }
 
 type ArqTestSuite struct {
@@ -48,17 +52,17 @@ func (suite *ArqTestSuite) TearDownTest() {
 
 func (suite *ArqTestSuite) TestSimpleWrite() {
 	suite.betaArq.ackThreshold = 1
-	suite.write(suite.alphaArq, repeatDataSize("A", 1), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.write(suite.alphaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
 func (suite *ArqTestSuite) TestWriteTwoSegments() {
 	suite.betaArq.ackThreshold = 2
-	suite.write(suite.alphaArq, repeatDataSize("A", 2), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
@@ -66,11 +70,32 @@ func (suite *ArqTestSuite) TestWriteTwoSegments() {
 
 func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
 	suite.betaArq.ackThreshold = 3
-	suite.write(suite.alphaArq, repeatDataSize("A", 2), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize("A", 1), suite.timestamp)
+	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
 	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
+}
+
+func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnAck() {
+	suite.betaArq.ackThreshold = 3
+	suite.alphaManipulator.DropOnce(2)
+	suite.alphaManipulator.DropOnce(3)
+	suite.write(suite.alphaArq, repeatDataSize('A', 5), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
+
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.write(suite.alphaArq, "", suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('D', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('E', 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
