@@ -1,6 +1,6 @@
 module github.com/nicosta1132/atp-go
 
-go 1.13
+go 1.14
 
 require (
 	github.com/flynn/noise v0.0.0-20180327030543-2492fe189ae6

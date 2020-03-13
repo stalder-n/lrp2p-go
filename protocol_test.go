@@ -111,6 +111,8 @@ func (suite *ArqConnectionTestSuite) TearDownTest() {
 }
 
 func (suite *ArqConnectionTestSuite) TestSimpleGreeting() {
+	suite.alphaConnection.ackThreshold = 1
+	suite.betaConnection.ackThreshold = 1
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
@@ -160,10 +162,12 @@ func (suite *FullConnectionTestSuite) TestSimpleGreeting() {
 		suite.write(suite.alphaConnection, expectedAlpha, timestamp)
 		suite.readAck(suite.alphaConnection, timestamp)
 		suite.read(suite.alphaConnection, expectedBeta, timestamp)
+		suite.readExpectStatus(suite.alphaConnection, timeout, suite.timeout())
 		mutex.Done()
 	}()
 	go func() {
 		suite.read(suite.betaConnection, expectedAlpha, timestamp)
+		suite.readExpectStatus(suite.betaConnection, timeout, suite.timeout())
 		suite.write(suite.betaConnection, expectedBeta, timestamp)
 		suite.readAck(suite.betaConnection, timestamp)
 		mutex.Done()

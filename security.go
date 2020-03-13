@@ -75,8 +75,7 @@ func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCo
 	}
 	encrypted := make([]byte, segmentMtu)
 	statusCode, n, err := sec.connector.Read(encrypted, timestamp)
-	if err != nil {
-		sec.reportError(err)
+	if statusCode != success {
 		return statusCode, n, err
 	}
 	nonce := binary.BigEndian.Uint64(encrypted[:8])

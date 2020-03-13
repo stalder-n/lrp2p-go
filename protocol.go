@@ -26,22 +26,18 @@ const (
 	success statusCode = iota
 	fail
 	ackReceived
-	pendingSegments
 	invalidSegment
 	windowFull
 	waitingForHandshake
 	invalidNonce
 	timeout
+	connectionClosed
 )
 
 type position struct {
 	Start int
 	End   int
 }
-
-var dataOffsetPosition = position{0, 1}
-var flagPosition = position{1, 2}
-var sequenceNumberPosition = position{2, 6}
 
 var retransmissionTimeout = 200 * time.Millisecond
 var timeoutCheckInterval = 100 * time.Millisecond
@@ -75,7 +71,7 @@ type connector interface {
 	reportError(error)
 }
 
-func connect(connector connector, errors chan error) connector {
+func connect(connector connector, errors chan error) *selectiveArq {
 	sec := newSecurityExtension(connector, nil, nil, errors)
 	arq := newSelectiveArq(generateRandomSequenceNumber(), sec, errors)
 	return arq
@@ -89,16 +85,17 @@ func handleError(err error) {
 
 type udpConnector struct {
 	server       *net.UDPConn
-	client       *net.UDPConn
+	remoteAddr   *net.UDPAddr
 	timeout      time.Duration
 	errorChannel chan error
 }
 
 const timeoutErrorString = "i/o timeout"
+const connectionClosedErrorString = "use of closed network connection"
 
 func udpListen(localPort int, errorChannel chan error) (*udpConnector, error) {
-	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
-	connection, err := net.ListenUDP("udp", remoteAddr)
+	localAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
+	connection, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -120,15 +117,13 @@ func createUDPAddress(addressString string, port int) *net.UDPAddr {
 }
 
 func (connector *udpConnector) Close() error {
-	senderError := connector.client.Close()
-	receiverError := connector.server.Close()
-	if senderError != nil {
-		return senderError
-	}
-	return receiverError
+	return connector.server.Close()
 }
 func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	n, err := connector.client.Write(buffer)
+	if connector.remoteAddr == nil {
+		return fail, 0, nil
+	}
+	n, err := connector.server.WriteToUDP(buffer, connector.remoteAddr)
 	if err != nil {
 		return fail, n, err
 	}
@@ -136,10 +131,7 @@ func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (status
 }
 
 func (connector *udpConnector) ConnectTo(remoteHost string, remotePort int) {
-	remoteAddr := createUDPAddress(remoteHost, remotePort)
-	client, err := net.DialUDP("udp", nil, remoteAddr)
-	handleError(err)
-	connector.client = client
+	connector.remoteAddr = createUDPAddress(remoteHost, remotePort)
 }
 
 func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
@@ -151,12 +143,17 @@ func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusC
 	}
 	err := connector.server.SetReadDeadline(deadline)
 	reportError(err)
-	n, err := connector.server.Read(buffer)
+	n, addr, err := connector.server.ReadFromUDP(buffer)
+	if connector.remoteAddr == nil {
+		connector.remoteAddr = addr
+	}
 	if err != nil {
 		switch err.(type) {
 		case *net.OpError:
 			if err.(*net.OpError).Err.Error() == timeoutErrorString {
 				return timeout, n, nil
+			} else if err.(*net.OpError).Err.Error() == connectionClosedErrorString {
+				return connectionClosed, 0, nil
 			}
 		}
 		return fail, n, err
@@ -177,7 +174,7 @@ func (connector *udpConnector) reportError(err error) {
 // Socket is an ATP Socket that can open a two-way connection to
 // another Socket. Use atp.SocketConnect to create an instance.
 type Socket struct {
-	connection    connector
+	connection    *selectiveArq
 	readBuffer    bytes.Buffer
 	dataAvailable *sync.Cond
 	isReading     bool
@@ -237,10 +234,6 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 			time.Sleep(retryTimeout)
 			statusCode, n, err = socket.connection.Write(nil, time.Now())
 			sumN += n
-		case pendingSegments:
-			time.Sleep(retryTimeout)
-			statusCode, n, err = socket.connection.Write(buffer, time.Now())
-			sumN += n
 		}
 	}
 
@@ -262,7 +255,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	return n, err
 }
 
-// SetReadTimeout sets an idle timeout for read all operations
+// SetReadTimeout sets an idle timeout for read operations
 func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 	socket.connection.SetReadTimeout(timeout)
 }
@@ -281,6 +274,8 @@ func (socket *Socket) read() {
 		case ackReceived:
 		case invalidNonce:
 		case invalidSegment:
+		case connectionClosed:
+			return
 		}
 	}
 }
