@@ -24,6 +24,7 @@ import (
 //   └───────┘          └───────┘
 // The sequence above shows the default case for this ARQ component
 // TODO: slow start, congestion control
+// TODO Replace slices with more efficient solution (e.g. ring buffer)
 type selectiveArq struct {
 	extension    connector
 	writeMutex   sync.Mutex
