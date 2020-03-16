@@ -17,7 +17,7 @@ func init() {
 }
 
 func (suite *atpTestSuite) timeout() time.Time {
-	return suite.timestamp.Add(arqTimeout)
+	return suite.timestamp.Add(arqTimeout + 1)
 }
 
 func (suite *atpTestSuite) handleTestError(err error) {

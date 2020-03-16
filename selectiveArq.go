@@ -45,7 +45,7 @@ type selectiveArq struct {
 	sendSynFlag           bool
 }
 
-const defaultArqTimeout = 50 * time.Millisecond
+const defaultArqTimeout = 10 * time.Millisecond
 const defaultInitialWindowSize = 20
 
 var arqTimeout = defaultArqTimeout
