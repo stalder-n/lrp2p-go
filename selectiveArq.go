@@ -46,7 +46,7 @@ type selectiveArq struct {
 }
 
 const defaultArqTimeout = 10 * time.Millisecond
-const defaultInitialWindowSize = 20
+const defaultInitialWindowSize = 5
 
 var arqTimeout = defaultArqTimeout
 
