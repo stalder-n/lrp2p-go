@@ -210,6 +210,15 @@ func (socket *Socket) GetNextError() error {
 	return <-socket.errorChannel
 }
 
+// TryGetNextError returns the next internal error that occurred. If no errors
+// are found, nil is returned instead instead of blocking
+func (socket *Socket) TryGetNextError() error {
+	if len(socket.errorChannel) > 0 {
+		return <-socket.errorChannel
+	}
+	return nil
+}
+
 // Close closes the underlying two-way connection interface, preventing all
 // future calls to Socket.Write and Socket.Read from having any effect
 func (socket *Socket) Close() error {
