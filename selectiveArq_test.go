@@ -73,7 +73,7 @@ func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
 	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
-	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, timeout, suite.timeout())
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())

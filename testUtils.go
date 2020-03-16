@@ -17,7 +17,7 @@ func init() {
 }
 
 func (suite *atpTestSuite) timeout() time.Time {
-	return suite.timestamp.Add(arqTimeout + 1)
+	return suite.timestamp.Add(arqTimeout)
 }
 
 func (suite *atpTestSuite) handleTestError(err error) {
@@ -120,7 +120,7 @@ func (connector *channelConnector) Close() error {
 	return nil
 }
 
-func (connector *channelConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+func (connector *channelConnector) Write(buffer []byte, _ time.Time) (statusCode, int, error) {
 	connector.out <- buffer
 	return success, len(buffer), nil
 }
@@ -153,7 +153,7 @@ func (connector *channelConnector) SetReadTimeout(t time.Duration) {
 }
 
 func (connector *channelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
-	artificialTimeout := operationTime.Sub(connector.artificialNow) + timeout
+	artificialTimeout := timeout - operationTime.Sub(connector.artificialNow)
 	return time.After(artificialTimeout)
 }
 
