@@ -17,6 +17,7 @@ const (
 var dataOffsetPosition = position{0, 1}
 var flagPosition = position{1, 2}
 var sequenceNumberPosition = position{2, 6}
+var windowSizePosition = position{6, 10}
 
 func getDataChunkSize() int {
 	return segmentMtu - headerLength
@@ -39,6 +40,7 @@ func isFlaggedAs(input byte, flag byte) bool {
 type segment struct {
 	buffer         []byte
 	sequenceNumber []byte
+	windowSize     []byte
 	data           []byte
 	timestamp      time.Time
 }
@@ -63,9 +65,13 @@ func (seg *segment) getSequenceNumber() uint32 {
 	return bytesToUint32(seg.sequenceNumber)
 }
 
-func (seg *segment) getExpectedSequenceNumber() uint32 {
-	seqNumLength := sequenceNumberPosition.End - sequenceNumberPosition.Start
-	return bytesToUint32(seg.data[0:seqNumLength])
+func (seg *segment) getWindowSize() uint32 {
+	return bytesToUint32(seg.windowSize)
+}
+
+func (seg *segment) setWindowSize(windowSize uint32) {
+	seg.windowSize = seg.buffer[windowSizePosition.Start:windowSizePosition.End]
+	binary.BigEndian.PutUint32(seg.windowSize, windowSize)
 }
 
 func (seg *segment) getDataAsString() string {
@@ -89,21 +95,30 @@ func setSequenceNumber(buffer []byte, sequenceNumber uint32) {
 }
 
 func createSegment(buffer []byte) *segment {
-	var data []byte = nil
-	if len(buffer) > headerLength {
-		data = buffer[buffer[dataOffsetPosition.Start]:]
-	}
-	return &segment{
+	dataOffset := int(buffer[dataOffsetPosition.Start])
+	flag := buffer[flagPosition.Start]
+	seg := &segment{
 		buffer:         buffer,
 		sequenceNumber: buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End],
-		data:           data,
+		data:           buffer[dataOffset:],
 	}
+	if isFlaggedAs(flag, flagACK) {
+		seg.windowSize = buffer[windowSizePosition.Start:windowSizePosition.End]
+	}
+	return seg
+}
+
+func getDataOffsetForFlag(flag byte) int {
+	if isFlaggedAs(flag, flagACK) {
+		return windowSizePosition.End
+	}
+	return sequenceNumberPosition.End
 }
 
 func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segment {
-	buffer := make([]byte, headerLength+len(data))
-	dataOffset := byte(headerLength)
-	setDataOffset(buffer, dataOffset)
+	dataOffset := getDataOffsetForFlag(flags)
+	buffer := make([]byte, dataOffset+len(data))
+	setDataOffset(buffer, byte(dataOffset))
 	setFlags(buffer, flags)
 	setSequenceNumber(buffer, sequenceNumber)
 	copy(buffer[dataOffset:], data)
@@ -114,7 +129,7 @@ func isInSequence(seg1, seg2 uint32) bool {
 	return seg1+1 == seg2
 }
 
-func createAckSegment(sequenceNumber uint32, numBuffer []uint32) *segment {
+func createAckSegment(sequenceNumber, windowSize uint32, numBuffer []uint32) *segment {
 	data := make([]byte, 0, segmentMtu)
 	var prevNum uint32
 	var lastDelim byte = 0
@@ -154,8 +169,9 @@ func createAckSegment(sequenceNumber uint32, numBuffer []uint32) *segment {
 	} else {
 		data = append(data, ackDelimEnd)
 	}
-
-	return createFlaggedSegment(sequenceNumber, flagACK, data)
+	seg := createFlaggedSegment(sequenceNumber, flagACK, data)
+	seg.setWindowSize(windowSize)
+	return seg
 }
 
 func ackSegmentToSequenceNumbers(ack *segment) []uint32 {
