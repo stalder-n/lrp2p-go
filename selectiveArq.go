@@ -125,6 +125,8 @@ func (arq *selectiveArq) reduceCongestionWindow() {
 func (arq *selectiveArq) increaseCongestionWindow(add, recvWindow uint32) {
 	if arq.congestionWindow+add > recvWindow {
 		arq.congestionWindow = recvWindow
+	} else if arq.congestionWindow+add < initialCongestionWindowSize {
+		arq.congestionWindow = initialCongestionWindowSize
 	} else {
 		arq.congestionWindow += add
 	}
