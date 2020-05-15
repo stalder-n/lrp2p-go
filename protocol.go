@@ -229,7 +229,6 @@ func (socket *Socket) Close() error {
 	return socket.connection.Close()
 }
 
-// TODO periodically call socket.connection.Write to requeue and write timed out segments
 // Write writes the specified buffer to the socket's underlying connection
 func (socket *Socket) Write(buffer []byte) (int, error) {
 	_, _, err := socket.connection.Write(buffer, time.Now())
