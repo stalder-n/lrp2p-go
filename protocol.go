@@ -174,14 +174,16 @@ func (connector *udpConnector) reportError(err error) {
 // Socket is an ATP Socket that can open a two-way connection to
 // another Socket. Use atp.SocketConnect to create an instance.
 type Socket struct {
-	connection   *selectiveArq
-	readBuffer   bytes.Buffer
-	readNotifier chan bool
-	mutex        sync.Mutex
-	timeout      time.Duration
-	isReading    bool
-	errorChannel chan error
+	connection    *selectiveArq
+	readBuffer    bytes.Buffer
+	readNotifier  chan bool
+	mutex         sync.Mutex
+	timeout       time.Duration
+	isReadWriting bool
+	errorChannel  chan error
 }
+
+const retryTimeout = 10 * time.Millisecond
 
 // SocketListen creates a socket listening on the specified local port for a connection
 func SocketListen(localPort int) *Socket {
@@ -230,33 +232,32 @@ func (socket *Socket) Close() error {
 // TODO periodically call socket.connection.Write to requeue and write timed out segments
 // Write writes the specified buffer to the socket's underlying connection
 func (socket *Socket) Write(buffer []byte) (int, error) {
-	retryTimeout := 10 * time.Millisecond
-	statusCode, n, err := socket.connection.Write(buffer, time.Now())
-	sumN := n
-	if !socket.isReading {
+	_, _, err := socket.connection.Write(buffer, time.Now())
+	if !socket.isReadWriting {
 		go socket.read()
-		socket.isReading = true
+		go socket.write()
+		socket.isReadWriting = true
 	}
-	for statusCode != success {
-		if err != nil {
-			return sumN, err
-		}
-		switch statusCode {
-		case windowFull:
-			time.Sleep(retryTimeout)
-			statusCode, n, err = socket.connection.Write(nil, time.Now())
-			sumN += n
-		}
-	}
+	return len(buffer), err
+}
 
-	return sumN, err
+func (socket *Socket) write() {
+	for {
+		statusCode, _, _ := socket.connection.Write(nil, time.Now())
+		switch statusCode {
+		case connectionClosed:
+			return
+		}
+		time.Sleep(retryTimeout)
+	}
 }
 
 // Read reads from the underlying connection interface
 func (socket *Socket) Read(buffer []byte) (int, error) {
-	if !socket.isReading {
+	if !socket.isReadWriting {
 		go socket.read()
-		socket.isReading = true
+		go socket.write()
+		socket.isReadWriting = true
 	}
 	socket.mutex.Lock()
 	for socket.readBuffer.Len() == 0 {
@@ -280,11 +281,6 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	return n, err
 }
 
-// SetReadTimeout sets an idle timeout for read operations
-func (socket *Socket) SetReadTimeout(timeout time.Duration) {
-	socket.timeout = timeout
-}
-
 func (socket *Socket) read() {
 	for {
 		buffer := make([]byte, segmentMtu)
@@ -305,6 +301,11 @@ func (socket *Socket) read() {
 			return
 		}
 	}
+}
+
+// SetReadTimeout sets an idle timeout for read operations
+func (socket *Socket) SetReadTimeout(timeout time.Duration) {
+	socket.timeout = timeout
 }
 
 func (socket *Socket) checkForSegmentTimeout() {
