@@ -142,7 +142,7 @@ func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusC
 		deadline = timeZero
 	}
 	err := connector.server.SetReadDeadline(deadline)
-	reportError(err)
+	connector.reportError(err)
 	n, addr, err := connector.server.ReadFromUDP(buffer)
 	if connector.remoteAddr == nil {
 		connector.remoteAddr = addr
