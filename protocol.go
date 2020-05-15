@@ -174,11 +174,13 @@ func (connector *udpConnector) reportError(err error) {
 // Socket is an ATP Socket that can open a two-way connection to
 // another Socket. Use atp.SocketConnect to create an instance.
 type Socket struct {
-	connection    *selectiveArq
-	readBuffer    bytes.Buffer
-	dataAvailable *sync.Cond
-	isReading     bool
-	errorChannel  chan error
+	connection   *selectiveArq
+	readBuffer   bytes.Buffer
+	readNotifier chan bool
+	mutex        sync.Mutex
+	timeout      time.Duration
+	isReading    bool
+	errorChannel chan error
 }
 
 // SocketListen creates a socket listening on the specified local port for a connection
@@ -191,9 +193,9 @@ func SocketListen(localPort int) *Socket {
 
 func newSocket(connector connector, errorChannel chan error) *Socket {
 	return &Socket{
-		connection:    connect(connector, errorChannel),
-		dataAvailable: sync.NewCond(&sync.Mutex{}),
-		errorChannel:  errorChannel,
+		connection:   connect(connector, errorChannel),
+		readNotifier: make(chan bool, 1),
+		errorChannel: errorChannel,
 	}
 }
 
@@ -256,19 +258,31 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 		go socket.read()
 		socket.isReading = true
 	}
-	socket.dataAvailable.L.Lock()
+	socket.mutex.Lock()
 	for socket.readBuffer.Len() == 0 {
-		socket.dataAvailable.Wait()
+		socket.mutex.Unlock()
+		if socket.timeout > 0 {
+			select {
+			case <-socket.readNotifier:
+				socket.mutex.Lock()
+			case <-time.After(socket.timeout):
+				return 0, nil
+			}
+		} else {
+			select {
+			case <-socket.readNotifier:
+				socket.mutex.Lock()
+			}
+		}
 	}
 	n, err := socket.readBuffer.Read(buffer)
-	socket.dataAvailable.L.Unlock()
+	socket.mutex.Unlock()
 	return n, err
 }
 
-// TODO implement artificial timeout separate from underlying udp connection
 // SetReadTimeout sets an idle timeout for read operations
 func (socket *Socket) SetReadTimeout(timeout time.Duration) {
-	socket.connection.SetReadTimeout(timeout)
+	socket.timeout = timeout
 }
 
 func (socket *Socket) read() {
@@ -278,10 +292,12 @@ func (socket *Socket) read() {
 		socket.connection.reportError(err)
 		switch statusCode {
 		case success:
-			socket.dataAvailable.L.Lock()
+			socket.mutex.Lock()
 			socket.readBuffer.Write(buffer[:n])
-			socket.dataAvailable.L.Unlock()
-			socket.dataAvailable.Signal()
+			socket.mutex.Unlock()
+			if len(socket.readNotifier) == 0 {
+				socket.readNotifier <- true
+			}
 		case ackReceived:
 		case invalidNonce:
 		case invalidSegment:
