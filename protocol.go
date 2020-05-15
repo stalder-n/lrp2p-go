@@ -46,7 +46,7 @@ var timeZero = time.Time{}
 
 var generateRandomSequenceNumber = func() uint32 {
 	b := make([]byte, 4)
-	_, err := rand.Read(b)
+	_, err := rand.Read(b[2:])
 	handleError(err)
 	sequenceNum := bytesToUint32(b)
 	if sequenceNum == 0 {
