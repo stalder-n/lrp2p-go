@@ -203,8 +203,8 @@ func (socket *Socket) ConnectTo(remoteHost string, remotePort int) {
 }
 
 // GetNextError returns the next internal error that occurred, if any is available.
-// As this read from the underlying error channel used to propagate errors
-// that cannot be properly returned, this method will block while no error
+// As this reads from the underlying error channel used to propagate errors
+// that cannot be properly returned, this method will block while no error is
 // available.
 func (socket *Socket) GetNextError() error {
 	return <-socket.errorChannel
