@@ -23,8 +23,11 @@ import (
 //   │Socket1│          │Socket2│
 //   └───────┘          └───────┘
 // The sequence above shows the default case for this ARQ component
-// TODO: slow start, congestion control
-// TODO Replace slices with more efficient solution (e.g. ring buffer)
+// TODO slow start, congestion control
+// TODO replace slices with ring buffer implementation
+//		- track number of valid segments
+// TODO add connection id
+// TODO add version number
 type selectiveArq struct {
 	extension    connector
 	writeMutex   sync.Mutex

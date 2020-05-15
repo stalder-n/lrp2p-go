@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// TODO execute handshake when establishing connection
+//    	- connection initiator is also handshake initiator
+//    	- start read procedure on connection establishment
 type securityExtension struct {
 	connector    connector
 	strategy     handshakeStrategy

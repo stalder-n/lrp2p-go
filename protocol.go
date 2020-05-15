@@ -225,6 +225,7 @@ func (socket *Socket) Close() error {
 	return socket.connection.Close()
 }
 
+// TODO periodically call socket.connection.Write to requeue and write timed out segments
 // Write writes the specified buffer to the socket's underlying connection
 func (socket *Socket) Write(buffer []byte) (int, error) {
 	retryTimeout := 10 * time.Millisecond
@@ -264,6 +265,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	return n, err
 }
 
+// TODO implement artificial timeout separate from underlying udp connection
 // SetReadTimeout sets an idle timeout for read operations
 func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 	socket.connection.SetReadTimeout(timeout)
