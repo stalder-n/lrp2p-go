@@ -179,7 +179,6 @@ func ackSegmentToSequenceNumbers(ack *segment) []uint32 {
 	if !ack.isFlaggedAs(flagACK) {
 		return segs
 	}
-	segs = append(segs, ack.getSequenceNumber())
 	if ack.data[0] == ackDelimEnd {
 		return segs
 	}

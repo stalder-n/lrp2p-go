@@ -50,8 +50,9 @@ type selectiveArq struct {
 }
 
 const defaultArqTimeout = 10 * time.Millisecond
-const initialCongestionWindowSize = 5
-const initialReceiverWindowSize = 1<<16 - 1
+const initialCongestionWindowSize = uint32(0x5)
+const initialReceiverWindowSize = uint32(1<<16 - 1)
+const defaultAckThreshold = 5
 
 var arqTimeout = defaultArqTimeout
 
@@ -61,9 +62,9 @@ func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors c
 		extension:                  extension,
 		errorChannel:               errors,
 		nextExpectedSequenceNumber: 0,
-		ackThreshold:               5,
+		ackThreshold:               defaultAckThreshold,
 		segmentBuffer:              make([]*segment, 0),
-		queuedForAck:               make([]uint32, 0),
+		queuedForAck:               make([]uint32, 0, defaultAckThreshold),
 		currentSequenceNumber:      initialSequenceNumber,
 		writeQueue:                 make([]*segment, 0),
 		waitingForAck:              make([]*segment, 0),
@@ -104,7 +105,7 @@ func (arq *selectiveArq) writeAck(timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
 	ack := createAckSegment(arq.nextExpectedSequenceNumber-1, arq.receiverWindow, arq.queuedForAck)
-	arq.queuedForAck = make([]uint32, arq.ackThreshold)
+	arq.queuedForAck = make([]uint32, 0, arq.ackThreshold)
 	ack.timestamp = timestamp
 	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
 	arq.segsSinceLastAck = 0
