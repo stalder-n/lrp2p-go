@@ -73,7 +73,7 @@ func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
 	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
-	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, timeout, suite.timeout())
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
@@ -115,6 +115,36 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
 
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
+}
+
+func (suite *ArqTestSuite) TestIncreaseCongestionWindowByAckedSegments() {
+	suite.betaArq.ackThreshold = 3
+	suite.Equal(initialCongestionWindowSize, suite.alphaArq.congestionWindow)
+	suite.write(suite.alphaArq, repeatDataSize('A', 3), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Equal(uint32(8), suite.alphaArq.congestionWindow)
+}
+
+func (suite *ArqTestSuite) TestIncreaseCongestionWindowByAckedAndLostSegments() {
+	suite.betaArq.ackThreshold = 3
+	suite.alphaManipulator.DropOnce(3)
+	suite.alphaManipulator.DropOnce(4)
+	suite.Equal(initialCongestionWindowSize, suite.alphaArq.congestionWindow)
+	suite.write(suite.alphaArq, repeatDataSize('A', 5), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
+	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Equal(uint32(6), suite.alphaArq.congestionWindow)
+	suite.write(suite.alphaArq, "", suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('D', 1), suite.timestamp)
+	suite.read(suite.betaArq, repeatDataSize('E', 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.Equal(uint32(8), suite.alphaArq.congestionWindow)
 }
 
 func TestSelectiveRepeatArq(t *testing.T) {

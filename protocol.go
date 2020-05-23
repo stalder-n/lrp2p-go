@@ -46,7 +46,7 @@ var timeZero = time.Time{}
 
 var generateRandomSequenceNumber = func() uint32 {
 	b := make([]byte, 4)
-	_, err := rand.Read(b)
+	_, err := rand.Read(b[2:])
 	handleError(err)
 	sequenceNum := bytesToUint32(b)
 	if sequenceNum == 0 {
@@ -142,7 +142,7 @@ func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusC
 		deadline = timeZero
 	}
 	err := connector.server.SetReadDeadline(deadline)
-	reportError(err)
+	connector.reportError(err)
 	n, addr, err := connector.server.ReadFromUDP(buffer)
 	if connector.remoteAddr == nil {
 		connector.remoteAddr = addr
@@ -176,10 +176,14 @@ func (connector *udpConnector) reportError(err error) {
 type Socket struct {
 	connection    *selectiveArq
 	readBuffer    bytes.Buffer
-	dataAvailable *sync.Cond
-	isReading     bool
+	readNotifier  chan bool
+	mutex         sync.Mutex
+	timeout       time.Duration
+	isReadWriting bool
 	errorChannel  chan error
 }
+
+const retryTimeout = 10 * time.Millisecond
 
 // SocketListen creates a socket listening on the specified local port for a connection
 func SocketListen(localPort int) *Socket {
@@ -191,9 +195,9 @@ func SocketListen(localPort int) *Socket {
 
 func newSocket(connector connector, errorChannel chan error) *Socket {
 	return &Socket{
-		connection:    connect(connector, errorChannel),
-		dataAvailable: sync.NewCond(&sync.Mutex{}),
-		errorChannel:  errorChannel,
+		connection:   connect(connector, errorChannel),
+		readNotifier: make(chan bool, 1),
+		errorChannel: errorChannel,
 	}
 }
 
@@ -203,11 +207,20 @@ func (socket *Socket) ConnectTo(remoteHost string, remotePort int) {
 }
 
 // GetNextError returns the next internal error that occurred, if any is available.
-// As this read from the underlying error channel used to propagate errors
-// that cannot be properly returned, this method will block while no error
+// As this reads from the underlying error channel used to propagate errors
+// that cannot be properly returned, this method will block while no error is
 // available.
 func (socket *Socket) GetNextError() error {
 	return <-socket.errorChannel
+}
+
+// TryGetNextError returns the next internal error that occurred. If no errors
+// are found, nil is returned instead instead of blocking
+func (socket *Socket) TryGetNextError() error {
+	if len(socket.errorChannel) > 0 {
+		return <-socket.errorChannel
+	}
+	return nil
 }
 
 // Close closes the underlying two-way connection interface, preventing all
@@ -218,46 +231,53 @@ func (socket *Socket) Close() error {
 
 // Write writes the specified buffer to the socket's underlying connection
 func (socket *Socket) Write(buffer []byte) (int, error) {
-	retryTimeout := 10 * time.Millisecond
-	statusCode, n, err := socket.connection.Write(buffer, time.Now())
-	sumN := n
-	if !socket.isReading {
+	_, _, err := socket.connection.Write(buffer, time.Now())
+	if !socket.isReadWriting {
 		go socket.read()
-		socket.isReading = true
+		go socket.write()
+		socket.isReadWriting = true
 	}
-	for statusCode != success {
-		if err != nil {
-			return sumN, err
-		}
-		switch statusCode {
-		case windowFull:
-			time.Sleep(retryTimeout)
-			statusCode, n, err = socket.connection.Write(nil, time.Now())
-			sumN += n
-		}
-	}
+	return len(buffer), err
+}
 
-	return sumN, err
+func (socket *Socket) write() {
+	for {
+		statusCode, _, _ := socket.connection.Write(nil, time.Now())
+		switch statusCode {
+		case connectionClosed:
+			return
+		}
+		time.Sleep(retryTimeout)
+	}
 }
 
 // Read reads from the underlying connection interface
 func (socket *Socket) Read(buffer []byte) (int, error) {
-	if !socket.isReading {
+	if !socket.isReadWriting {
 		go socket.read()
-		socket.isReading = true
+		go socket.write()
+		socket.isReadWriting = true
 	}
-	socket.dataAvailable.L.Lock()
+	socket.mutex.Lock()
 	for socket.readBuffer.Len() == 0 {
-		socket.dataAvailable.Wait()
+		socket.mutex.Unlock()
+		if socket.timeout > 0 {
+			select {
+			case <-socket.readNotifier:
+				socket.mutex.Lock()
+			case <-time.After(socket.timeout):
+				return 0, nil
+			}
+		} else {
+			select {
+			case <-socket.readNotifier:
+				socket.mutex.Lock()
+			}
+		}
 	}
 	n, err := socket.readBuffer.Read(buffer)
-	socket.dataAvailable.L.Unlock()
+	socket.mutex.Unlock()
 	return n, err
-}
-
-// SetReadTimeout sets an idle timeout for read operations
-func (socket *Socket) SetReadTimeout(timeout time.Duration) {
-	socket.connection.SetReadTimeout(timeout)
 }
 
 func (socket *Socket) read() {
@@ -267,10 +287,12 @@ func (socket *Socket) read() {
 		socket.connection.reportError(err)
 		switch statusCode {
 		case success:
-			socket.dataAvailable.L.Lock()
+			socket.mutex.Lock()
 			socket.readBuffer.Write(buffer[:n])
-			socket.dataAvailable.L.Unlock()
-			socket.dataAvailable.Signal()
+			socket.mutex.Unlock()
+			if len(socket.readNotifier) == 0 {
+				socket.readNotifier <- true
+			}
 		case ackReceived:
 		case invalidNonce:
 		case invalidSegment:
@@ -278,6 +300,11 @@ func (socket *Socket) read() {
 			return
 		}
 	}
+}
+
+// SetReadTimeout sets an idle timeout for read operations
+func (socket *Socket) SetReadTimeout(timeout time.Duration) {
+	socket.timeout = timeout
 }
 
 func (socket *Socket) checkForSegmentTimeout() {
