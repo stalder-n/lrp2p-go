@@ -186,10 +186,8 @@ type SocketTestSuite struct {
 }
 
 func (suite *SocketTestSuite) SetupTest() {
-	suite.alphaSocket = SocketListen(3030)
 	suite.betaSocket = SocketListen(3031)
-	suite.alphaSocket.Dial("localhost", 3031)
-	suite.betaSocket.Dial("localhost", 3030)
+	suite.alphaSocket = SocketDial(3030, "localhost", 3031)
 }
 
 func (suite *SocketTestSuite) TearDownTest() {

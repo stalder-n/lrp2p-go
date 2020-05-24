@@ -193,6 +193,14 @@ func SocketListen(localPort int) *Socket {
 	return newSocket(connector, errorChannel)
 }
 
+// SocketDial creates a new socket listening on the specified local port and also connects
+// it to the given remote host
+func SocketDial(localPort int, remoteHost string, remotePort int) *Socket {
+	socket := SocketListen(localPort)
+	socket.Dial(remoteHost, remotePort)
+	return socket
+}
+
 func newSocket(connector connector, errorChannel chan error) *Socket {
 	return &Socket{
 		connection:   dial(connector, errorChannel),
