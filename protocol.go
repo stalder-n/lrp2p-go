@@ -67,11 +67,11 @@ type connector interface {
 	Write([]byte, time.Time) (statusCode, int, error)
 	Close() error
 	SetReadTimeout(time.Duration)
-	ConnectTo(remoteHost string, remotePort int)
+	Dial(remoteHost string, remotePort int)
 	reportError(error)
 }
 
-func connect(connector connector, errors chan error) *selectiveArq {
+func dial(connector connector, errors chan error) *selectiveArq {
 	sec := newSecurityExtension(connector, nil, nil, errors)
 	arq := newSelectiveArq(generateRandomSequenceNumber(), sec, errors)
 	return arq
@@ -130,7 +130,7 @@ func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (status
 	return success, n, err
 }
 
-func (connector *udpConnector) ConnectTo(remoteHost string, remotePort int) {
+func (connector *udpConnector) Dial(remoteHost string, remotePort int) {
 	connector.remoteAddr = createUDPAddress(remoteHost, remotePort)
 }
 
@@ -195,15 +195,15 @@ func SocketListen(localPort int) *Socket {
 
 func newSocket(connector connector, errorChannel chan error) *Socket {
 	return &Socket{
-		connection:   connect(connector, errorChannel),
+		connection:   dial(connector, errorChannel),
 		readNotifier: make(chan bool, 1),
 		errorChannel: errorChannel,
 	}
 }
 
-// ConnectTo points this socket to the specified remote host and port
-func (socket *Socket) ConnectTo(remoteHost string, remotePort int) {
-	socket.connection.ConnectTo(remoteHost, remotePort)
+// Dial points this socket to the specified remote host and port
+func (socket *Socket) Dial(remoteHost string, remotePort int) {
+	socket.connection.Dial(remoteHost, remotePort)
 }
 
 // GetNextError returns the next internal error that occurred, if any is available.

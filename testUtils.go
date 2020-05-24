@@ -62,8 +62,8 @@ type segmentManipulator struct {
 	extension     connector
 }
 
-func (manipulator *segmentManipulator) ConnectTo(remoteHost string, remotePort int) {
-	manipulator.extension.ConnectTo(remoteHost, remotePort)
+func (manipulator *segmentManipulator) Dial(remoteHost string, remotePort int) {
+	manipulator.extension.Dial(remoteHost, remotePort)
 }
 
 func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
@@ -111,7 +111,7 @@ type channelConnector struct {
 	artificialNow time.Time
 }
 
-func (connector *channelConnector) ConnectTo(remoteHost string, remotePort int) {
+func (connector *channelConnector) Dial(remoteHost string, remotePort int) {
 	panic("not implemented")
 }
 

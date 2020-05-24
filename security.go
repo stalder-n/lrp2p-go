@@ -23,8 +23,8 @@ type securityExtension struct {
 	errorChannel chan error
 }
 
-func (sec *securityExtension) ConnectTo(remoteHost string, remotePort int) {
-	sec.connector.ConnectTo(remoteHost, remotePort)
+func (sec *securityExtension) Dial(remoteHost string, remotePort int) {
+	sec.connector.Dial(remoteHost, remotePort)
 }
 
 func newSecurityExtension(connector connector, key *noise.DHKey, peerKey []byte, errors chan error) *securityExtension {

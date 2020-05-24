@@ -18,8 +18,8 @@ func (suite *UDPConnectorTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnection, err := udpListen(3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnection.ConnectTo("localhost", 3031)
-	betaConnection.ConnectTo("localhost", 3030)
+	alphaConnection.Dial("localhost", 3031)
+	betaConnection.Dial("localhost", 3030)
 	suite.alphaConnection = alphaConnection
 	suite.betaConnection = betaConnection
 }
@@ -54,8 +54,8 @@ func (suite *SecureConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnector, err := udpListen(3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
+	alphaConnector.Dial("localhost", 3031)
+	betaConnector.Dial("localhost", 3030)
 	suite.alphaConnection = newSecurityExtension(alphaConnector, nil, nil, testErrorChannel)
 	suite.betaConnection = newSecurityExtension(betaConnector, nil, nil, testErrorChannel)
 }
@@ -99,8 +99,8 @@ func (suite *ArqConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnector, err := udpListen(3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
+	alphaConnector.Dial("localhost", 3031)
+	betaConnector.Dial("localhost", 3030)
 	suite.alphaConnection = newSelectiveArq(1, alphaConnector, testErrorChannel)
 	suite.betaConnection = newSelectiveArq(1, betaConnector, testErrorChannel)
 }
@@ -140,10 +140,10 @@ func (suite *FullConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnector, err := udpListen(3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
-	suite.alphaConnection = connect(alphaConnector, testErrorChannel)
-	suite.betaConnection = connect(betaConnector, testErrorChannel)
+	alphaConnector.Dial("localhost", 3031)
+	betaConnector.Dial("localhost", 3030)
+	suite.alphaConnection = dial(alphaConnector, testErrorChannel)
+	suite.betaConnection = dial(betaConnector, testErrorChannel)
 
 }
 
@@ -188,8 +188,8 @@ type SocketTestSuite struct {
 func (suite *SocketTestSuite) SetupTest() {
 	suite.alphaSocket = SocketListen(3030)
 	suite.betaSocket = SocketListen(3031)
-	suite.alphaSocket.ConnectTo("localhost", 3031)
-	suite.betaSocket.ConnectTo("localhost", 3030)
+	suite.alphaSocket.Dial("localhost", 3031)
+	suite.betaSocket.Dial("localhost", 3030)
 }
 
 func (suite *SocketTestSuite) TearDownTest() {

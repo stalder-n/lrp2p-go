@@ -260,8 +260,8 @@ func (arq *selectiveArq) SetReadTimeout(timeout time.Duration) {
 	arq.extension.SetReadTimeout(timeout)
 }
 
-func (arq *selectiveArq) ConnectTo(remoteHost string, remotePort int) {
-	arq.extension.ConnectTo(remoteHost, remotePort)
+func (arq *selectiveArq) Dial(remoteHost string, remotePort int) {
+	arq.extension.Dial(remoteHost, remotePort)
 }
 
 func (arq *selectiveArq) reportError(err error) {
