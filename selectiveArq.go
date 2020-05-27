@@ -35,7 +35,7 @@ type selectiveArq struct {
 
 	// receiver
 	nextExpectedSequenceNumber uint32
-	segmentBuffer              []*segment
+	segmentBuffer              *ringBuffer
 	queuedForAck               []uint32
 	segsSinceLastAck           int
 	ackThreshold               int
@@ -50,7 +50,7 @@ type selectiveArq struct {
 }
 
 const defaultArqTimeout = 10 * time.Millisecond
-const initialCongestionWindowSize = uint32(0x5)
+const initialCongestionWindowSize = uint32(5)
 const initialReceiverWindowSize = uint32(1<<16 - 1)
 const defaultAckThreshold = 5
 
@@ -63,7 +63,7 @@ func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors c
 		errorChannel:               errors,
 		nextExpectedSequenceNumber: 0,
 		ackThreshold:               defaultAckThreshold,
-		segmentBuffer:              make([]*segment, 0),
+		segmentBuffer:              newRingBuffer(),
 		queuedForAck:               make([]uint32, 0, defaultAckThreshold),
 		currentSequenceNumber:      initialSequenceNumber,
 		writeQueue:                 make([]*segment, 0),
@@ -112,7 +112,7 @@ func (arq *selectiveArq) writeAck(timestamp time.Time) {
 }
 
 func (arq *selectiveArq) hasAvailableSegments() bool {
-	return len(arq.segmentBuffer) > 0 && arq.segmentBuffer[0].getSequenceNumber() == arq.nextExpectedSequenceNumber
+	return arq.segmentBuffer.numOfElements > 0 && arq.segmentBuffer.get(arq.nextExpectedSequenceNumber) != nil
 }
 
 func max(x, y uint32) uint32 {
@@ -156,7 +156,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 			arq.writeAck(timestamp)
 			return invalidSegment, 0, err
 		}
-		arq.segmentBuffer = insertSegmentInOrder(arq.segmentBuffer, receivedSeg)
+		arq.segmentBuffer.insert(receivedSeg)
 		arq.queuedForAck = insertUin32InOrder(arq.queuedForAck, receivedSeg.getSequenceNumber())
 		arq.segsSinceLastAck++
 	case timeout:
@@ -168,7 +168,7 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	}
 	var seg *segment
 	if arq.hasAvailableSegments() {
-		seg, arq.segmentBuffer = popSegment(arq.segmentBuffer)
+		seg = arq.segmentBuffer.remove(arq.nextExpectedSequenceNumber)
 		arq.nextExpectedSequenceNumber++
 		if arq.segsSinceLastAck >= arq.ackThreshold {
 			arq.writeAck(timestamp)
@@ -268,4 +268,40 @@ func (arq *selectiveArq) reportError(err error) {
 	if err != nil {
 		arq.errorChannel <- err
 	}
+}
+
+const ringBufferSize = 100_000
+
+type ringBuffer struct {
+	buffer        []*segment
+	numOfElements int
+}
+
+func newRingBuffer() *ringBuffer {
+	return &ringBuffer{
+		buffer: make([]*segment, ringBufferSize),
+	}
+}
+
+func (ring *ringBuffer) insert(seg *segment) {
+	ring.buffer[toIndex(seg.getSequenceNumber())] = seg
+	ring.numOfElements++
+}
+
+func (ring *ringBuffer) get(sequenceNumber uint32) *segment {
+	return ring.buffer[toIndex(sequenceNumber)]
+}
+
+func (ring *ringBuffer) remove(sequenceNumber uint32) *segment {
+	index := toIndex(sequenceNumber)
+	seg := ring.buffer[index]
+	if seg != nil {
+		ring.buffer[index] = nil
+		ring.numOfElements--
+	}
+	return seg
+}
+
+func toIndex(u uint32) int {
+	return int(u % uint32(ringBufferSize))
 }
