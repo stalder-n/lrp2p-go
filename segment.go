@@ -218,21 +218,6 @@ func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
 	return append(segments, insert)
 }
 
-func insertUin32InOrder(nums []uint32, insert uint32) []uint32 {
-	for i, num := range nums {
-		if insert < num {
-			nums = append(nums, 0)
-			copy(nums[i+1:], nums[i:])
-			nums[i] = insert
-			return nums
-		}
-		if insert == num {
-			return nums
-		}
-	}
-	return append(nums, insert)
-}
-
 func removeSegment(segments []*segment, sequenceNumber uint32) (*segment, []*segment) {
 	for i, seg := range segments {
 		if seg.getSequenceNumber() == sequenceNumber {

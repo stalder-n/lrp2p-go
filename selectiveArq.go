@@ -37,7 +37,6 @@ type selectiveArq struct {
 	nextExpectedSequenceNumber uint32
 	segmentBuffer              []*segment
 	queuedForAck               []uint32
-	segsSinceLastAck           int
 	ackThreshold               int
 	receiverWindow             uint32
 
@@ -49,9 +48,9 @@ type selectiveArq struct {
 	sendSynFlag           bool
 }
 
-const defaultArqTimeout = 10 * time.Millisecond
 const initialCongestionWindowSize = uint32(0x5)
 const initialReceiverWindowSize = uint32(1<<16 - 1)
+const defaultArqTimeout = 10 * time.Millisecond
 const defaultAckThreshold = 5
 
 var arqTimeout = defaultArqTimeout
@@ -108,7 +107,10 @@ func (arq *selectiveArq) writeAck(timestamp time.Time) {
 	arq.queuedForAck = make([]uint32, 0, arq.ackThreshold)
 	ack.timestamp = timestamp
 	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
-	arq.segsSinceLastAck = 0
+}
+
+func (arq *selectiveArq) readyToACK() int {
+	return len(arq.queuedForAck)
 }
 
 func (arq *selectiveArq) hasAvailableSegments() bool {
@@ -157,10 +159,9 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 			return invalidSegment, 0, err
 		}
 		arq.segmentBuffer = insertSegmentInOrder(arq.segmentBuffer, receivedSeg)
-		arq.queuedForAck = insertUin32InOrder(arq.queuedForAck, receivedSeg.getSequenceNumber())
-		arq.segsSinceLastAck++
+		arq.queuedForAck = append(arq.queuedForAck, receivedSeg.getSequenceNumber())
 	case timeout:
-		if arq.nextExpectedSequenceNumber > 0 && arq.segsSinceLastAck > 0 {
+		if arq.nextExpectedSequenceNumber > 0 && arq.readyToACK() > 0 {
 			arq.writeAck(timestamp)
 		}
 	default:
@@ -170,13 +171,13 @@ func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, i
 	if arq.hasAvailableSegments() {
 		seg, arq.segmentBuffer = popSegment(arq.segmentBuffer)
 		arq.nextExpectedSequenceNumber++
-		if arq.segsSinceLastAck >= arq.ackThreshold {
+		if arq.readyToACK() >= arq.ackThreshold {
 			arq.writeAck(timestamp)
 		}
 		copy(buffer, seg.data)
 		return success, len(seg.data), err
 	} else if status == success {
-		if arq.segsSinceLastAck >= arq.ackThreshold {
+		if arq.readyToACK() >= arq.ackThreshold {
 			arq.writeAck(timestamp)
 		}
 		return invalidSegment, 0, err
