@@ -72,7 +72,7 @@ Sequence Number:
 ```
 
 ### ACK Segment
-| Data Offset (1B) | Flags (1B) | Sequence Number (4B) | Window Size (4B) |
+| Data Offset (1B) | Flags (1B) | Sequence Number (4B) | Window Size (3B) |
 | ---------------- | ---------- | -------------------- | ---------------- |
 
 ```
@@ -86,5 +86,15 @@ Sequence Number:
     32-bit sequence number designating a segments order. For ACKS, this is always the last in-order number
 
 Window Size:
-    32-bit number telling the sender how large its congestion window may grow
+    24-bit number telling the sender how large its congestion window may grow
 ```
+
+### Window Size of the SND and RCV buffer
+
+The buffer size needs to be at least as large as the [BDP](https://en.wikipedia.org/wiki/Bandwidth-delay_product). TCP can increase the window size of to 1'073'725'440 and is measured in bytes. ATP measures in packets, and a packet size of 1400 is assumed.
+
+To allow a 100Gibt/s over a sattelite link with 600ms RTT one has:
+```
+100'000'000'000 x 0.6 / 8 = 7.5 GByte
+```
+which means that 7.5GB can be in transit. The number of packets is ~5.3mio assuming packet size of 1400. Thus, 23bit would fit, and therefore we chose 24bit, 3 bytes to store the window size.
