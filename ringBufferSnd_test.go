@@ -112,3 +112,21 @@ func TestInsertRemove2(t *testing.T) {
 	s = r.getTimedout(timeZero.Add(time.Second*time.Duration(r.timoutSec()) + 1))
 	assert.Equal(t, 0, len(s))
 }
+
+func TestAlmostFull(t *testing.T) {
+	r := NewRingBufferSnd(10, 3)
+	for i := 0; i < 10; i++ {
+		seg := makeSegment(uint32(i))
+		err := r.insertSequence(seg)
+		assert.NoError(t, err)
+	}
+	r.remove(4)
+	seg := makeSegment(10)
+	err := r.insertSequence(seg)
+	assert.Error(t, err)
+	r.remove(0)
+
+	seg = makeSegment(10)
+	err = r.insertSequence(seg)
+	assert.NoError(t, err)
+}

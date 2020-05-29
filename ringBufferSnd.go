@@ -11,7 +11,6 @@ type ringBufferSnd struct {
 	r          uint32
 	w          uint32
 	timeoutSec int
-	full       bool
 	prevSn     uint32
 }
 
@@ -25,19 +24,18 @@ func NewRingBufferSnd(size uint32, timeoutSec int) *ringBufferSnd {
 }
 
 func (ring *ringBufferSnd) insertSequence(seg *segment) error {
-	if ring.full { //is full
+	if ((ring.w + 1) % ring.size) == ring.r { //is full
 		return fmt.Errorf("ring buffer is full, cannot add %v/%v", ring.w, ring.r)
 	}
 	if ring.prevSn != seg.getSequenceNumber()-1 {
 		return fmt.Errorf("not a sequence, cannot add %v/%v", ring.prevSn, (seg.getSequenceNumber() - 1))
 	}
-
+	if ring.buffer[ring.w] != nil {
+		fmt.Errorf("not empty at pos %v", ring.w)
+	}
 	ring.prevSn = seg.getSequenceNumber()
 	ring.buffer[ring.w] = seg
 	ring.w = (ring.w + 1) % ring.size
-	if ((ring.w + 1) % ring.size) == ring.r {
-		ring.full = true
-	}
 	return nil
 }
 
@@ -81,7 +79,6 @@ func (ring *ringBufferSnd) remove(sequenceNumber uint32) (*segment, error) {
 			break
 		}
 	}
-	ring.full = false
 	return seg, nil
 }
 
