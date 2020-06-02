@@ -99,10 +99,6 @@ func (seg *segment) getDataAsString() string {
 	return string(seg.data)
 }
 
-func (seg *segment) hasTimedOut(timestamp time.Time) bool {
-	return timestamp.After(seg.timestamp.Add(retransmissionTimeout))
-}
-
 func setDataOffset(buffer []byte, dataOffset byte) {
 	buffer[dataOffsetPosition.Start] = dataOffset
 }

@@ -34,7 +34,6 @@ type position struct {
 	End   int
 }
 
-var retransmissionTimeout = 200 * time.Millisecond
 var timeoutCheckInterval = 100 * time.Millisecond
 
 var timeZero = time.Time{}
