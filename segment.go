@@ -14,6 +14,11 @@ const (
 	ackDelimEnd   byte = 8
 )
 
+const (
+	flagACK byte = 1
+	flagSYN byte = 2
+)
+
 var dataOffsetPosition = position{0, 1}
 var flagPosition = position{1, 2}
 var sequenceNumberPosition = position{2, 6}
