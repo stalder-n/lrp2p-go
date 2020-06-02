@@ -46,6 +46,13 @@ type selectiveArq struct {
 	waitingForAck         []*segment
 	congestionWindow      uint32
 	sendSynFlag           bool
+
+	// RTT
+	rttToMeasure int
+	granularity  time.Duration // clock granularity
+	sRtt         time.Duration // smoothed round-trip time
+	rttVar       time.Duration // round-trip time variation
+	rto          time.Duration // retransmission timeout
 }
 
 const initialCongestionWindowSize = uint32(0x5)
@@ -58,18 +65,20 @@ var arqTimeout = defaultArqTimeout
 func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
 	extension.SetReadTimeout(arqTimeout)
 	return &selectiveArq{
-		extension:                  extension,
-		errorChannel:               errors,
-		nextExpectedSequenceNumber: 0,
-		ackThreshold:               defaultAckThreshold,
-		segmentBuffer:              make([]*segment, 0),
-		queuedForAck:               make([]uint32, 0, defaultAckThreshold),
-		currentSequenceNumber:      initialSequenceNumber,
-		writeQueue:                 make([]*segment, 0),
-		waitingForAck:              make([]*segment, 0),
-		receiverWindow:             initialReceiverWindowSize,
-		congestionWindow:           initialCongestionWindowSize,
-		sendSynFlag:                true,
+		extension:             extension,
+		errorChannel:          errors,
+		ackThreshold:          defaultAckThreshold,
+		segmentBuffer:         make([]*segment, 0),
+		queuedForAck:          make([]uint32, 0, defaultAckThreshold),
+		currentSequenceNumber: initialSequenceNumber,
+		writeQueue:            make([]*segment, 0),
+		waitingForAck:         make([]*segment, 0),
+		receiverWindow:        initialReceiverWindowSize,
+		congestionWindow:      initialCongestionWindowSize,
+		sendSynFlag:           true,
+		rttToMeasure:          5,
+		granularity:           100 * time.Millisecond,
+		rto:                   1 * time.Second,
 	}
 }
 
