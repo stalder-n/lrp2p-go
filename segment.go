@@ -17,6 +17,14 @@ const (
 const (
 	flagACK byte = 1
 	flagSYN byte = 2
+
+	// segments sent with this flag will be ACKed immediately to accurately
+	// measure network RTT
+	flagRTT byte = 4
+
+	// segments sent with this flag are subject to retransmission and may
+	// not be used to measure RTT
+	flagRTO byte = 8
 )
 
 var dataOffsetPosition = position{0, 1}
@@ -58,8 +66,16 @@ func (seg *segment) getHeaderSize() int {
 	return int(seg.getDataOffset())
 }
 
+func (seg *segment) addFlag(flag byte) {
+	seg.setFlags(seg.getFlags() | flag)
+}
+
 func (seg *segment) getFlags() byte {
 	return seg.buffer[flagPosition.Start]
+}
+
+func (seg *segment) setFlags(flags byte) {
+	seg.buffer[flagPosition.Start] = flags
 }
 
 func (seg *segment) isFlaggedAs(flag byte) bool {
