@@ -304,7 +304,7 @@ func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 func (socket *Socket) checkForSegmentTimeout() {
 	for {
 		select {
-		case <-time.After(timeoutCheckInterval):
+		case <-time.After(socket.connection.rto):
 			_, _, err := socket.connection.Write(nil, time.Now())
 			reportError(err)
 		}
