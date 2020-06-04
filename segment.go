@@ -18,14 +18,12 @@ const (
 	flagACK byte = 1
 	flagSYN byte = 2
 
-	// segments sent with this flag will be ACKed immediately to accurately
-	// measure network RTT
-	flagRTT byte = 4
-
 	// segments sent with this flag are subject to retransmission and may
 	// not be used to measure RTT
 	flagRTO byte = 8
 )
+
+const defaultRetransmitThresh = 3
 
 var dataOffsetPosition = position{0, 1}
 var flagPosition = position{1, 2}
@@ -51,11 +49,12 @@ func isFlaggedAs(input byte, flag byte) bool {
 }
 
 type segment struct {
-	buffer         []byte
-	sequenceNumber []byte
-	windowSize     []byte
-	data           []byte
-	timestamp      time.Time
+	buffer           []byte
+	sequenceNumber   []byte
+	windowSize       []byte
+	data             []byte
+	timestamp        time.Time
+	retransmitThresh uint32
 }
 
 func (seg *segment) getDataOffset() byte {
@@ -115,9 +114,10 @@ func createSegment(buffer []byte) *segment {
 	dataOffset := int(buffer[dataOffsetPosition.Start])
 	flag := buffer[flagPosition.Start]
 	seg := &segment{
-		buffer:         buffer,
-		sequenceNumber: buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End],
-		data:           buffer[dataOffset:],
+		buffer:           buffer,
+		sequenceNumber:   buffer[sequenceNumberPosition.Start:sequenceNumberPosition.End],
+		data:             buffer[dataOffset:],
+		retransmitThresh: defaultRetransmitThresh,
 	}
 	if isFlaggedAs(flag, flagACK) {
 		seg.windowSize = buffer[windowSizePosition.Start:windowSizePosition.End]
@@ -142,82 +142,10 @@ func createFlaggedSegment(sequenceNumber uint32, flags byte, data []byte) *segme
 	return createSegment(buffer)
 }
 
-func isInSequence(seg1, seg2 uint32) bool {
-	return seg1+1 == seg2
-}
-
-func createAckSegment(sequenceNumber, windowSize uint32, numBuffer []uint32) *segment {
-	data := make([]byte, 0, segmentMtu)
-	var prevNum uint32
-	var lastDelim byte = 0
-	if len(numBuffer) > 0 {
-		data = append(data, ackDelimStart)
-	}
-
-	for _, num := range numBuffer {
-		switch lastDelim {
-		case ackDelimSeq:
-			if isInSequence(prevNum, num) {
-				data[len(data)-1] = ackDelimRange
-				data = append(data, uint32ToBytes(num)...)
-				lastDelim = ackDelimRange
-			} else {
-				data = append(data, uint32ToBytes(num)...)
-				data = append(data, ackDelimSeq)
-			}
-		case ackDelimRange:
-			if isInSequence(prevNum, num) {
-				copy(data[len(data)-4:], uint32ToBytes(num))
-			} else {
-				data = append(data, ackDelimSeq)
-				data = append(data, uint32ToBytes(num)...)
-				data = append(data, ackDelimSeq)
-				lastDelim = ackDelimSeq
-			}
-		default:
-			data = append(data, uint32ToBytes(num)...)
-			data = append(data, ackDelimSeq)
-			lastDelim = ackDelimSeq
-		}
-		prevNum = num
-	}
-	if lastDelim == ackDelimSeq {
-		data[len(data)-1] = ackDelimEnd
-	} else {
-		data = append(data, ackDelimEnd)
-	}
-	seg := createFlaggedSegment(sequenceNumber, flagACK, data)
+func createAckSegment(lastInOrder, sequenceNumber, windowSize uint32) *segment {
+	seg := createFlaggedSegment(lastInOrder, flagACK, uint32ToBytes(sequenceNumber))
 	seg.setWindowSize(windowSize)
 	return seg
-}
-
-func ackSegmentToSequenceNumbers(ack *segment) []uint32 {
-	segs := make([]uint32, 0)
-	if !ack.isFlaggedAs(flagACK) {
-		return segs
-	}
-	if ack.data[0] == ackDelimEnd {
-		return segs
-	}
-
-	delim := ackDelimSeq
-	for i := 1; delim != ackDelimEnd && i < len(ack.data); i++ {
-		switch delim {
-		case ackDelimSeq:
-			sequenceNum := bytesToUint32(ack.data[i : i+4])
-			segs = append(segs, sequenceNum)
-			i += 4
-		case ackDelimRange:
-			to := bytesToUint32(ack.data[i : i+4])
-			i += 4
-			for current := segs[len(segs)-1] + 1; current <= to; current++ {
-				segs = append(segs, current)
-			}
-		}
-		delim = ack.data[i]
-	}
-
-	return segs
 }
 
 func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
@@ -259,8 +187,4 @@ func removeAllSegmentsWhere(segments []*segment, condition func(*segment) bool) 
 
 func popSegment(segments []*segment) (*segment, []*segment) {
 	return segments[0], segments[1:]
-}
-
-func popUint32(nums []uint32) (uint32, []uint32) {
-	return nums[0], nums[1:]
 }

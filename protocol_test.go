@@ -111,8 +111,6 @@ func (suite *ArqConnectionTestSuite) TearDownTest() {
 }
 
 func (suite *ArqConnectionTestSuite) TestSimpleGreeting() {
-	suite.alphaConnection.ackThreshold = 1
-	suite.betaConnection.ackThreshold = 1
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
