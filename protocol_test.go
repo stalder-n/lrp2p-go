@@ -14,9 +14,9 @@ type UDPConnectorTestSuite struct {
 }
 
 func (suite *UDPConnectorTestSuite) SetupTest() {
-	alphaConnection, err := udpListen(3030, testErrorChannel)
+	alphaConnection, err := udpListen(localhost, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnection, err := udpListen(3031, testErrorChannel)
+	betaConnection, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	alphaConnection.ConnectTo("localhost", 3031)
 	betaConnection.ConnectTo("localhost", 3030)
@@ -50,9 +50,9 @@ type SecureConnectionTestSuite struct {
 }
 
 func (suite *SecureConnectionTestSuite) SetupTest() {
-	alphaConnector, err := udpListen(3030, testErrorChannel)
+	alphaConnector, err := udpListen(localhost, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnector, err := udpListen(3031, testErrorChannel)
+	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	alphaConnector.ConnectTo("localhost", 3031)
 	betaConnector.ConnectTo("localhost", 3030)
@@ -95,9 +95,9 @@ type ArqConnectionTestSuite struct {
 }
 
 func (suite *ArqConnectionTestSuite) SetupTest() {
-	alphaConnector, err := udpListen(3030, testErrorChannel)
+	alphaConnector, err := udpListen(localhost, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnector, err := udpListen(3031, testErrorChannel)
+	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	alphaConnector.ConnectTo("localhost", 3031)
 	betaConnector.ConnectTo("localhost", 3030)
@@ -136,9 +136,9 @@ type FullConnectionTestSuite struct {
 }
 
 func (suite *FullConnectionTestSuite) SetupTest() {
-	alphaConnector, err := udpListen(3030, testErrorChannel)
+	alphaConnector, err := udpListen(localhost, 3030, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnector, err := udpListen(3031, testErrorChannel)
+	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	alphaConnector.ConnectTo("localhost", 3031)
 	betaConnector.ConnectTo("localhost", 3030)
@@ -186,8 +186,8 @@ type SocketTestSuite struct {
 }
 
 func (suite *SocketTestSuite) SetupTest() {
-	suite.alphaSocket = SocketListen(3030)
-	suite.betaSocket = SocketListen(3031)
+	suite.alphaSocket = SocketListen(localhost, 3030)
+	suite.betaSocket = SocketListen(localhost, 3031)
 	suite.alphaSocket.ConnectTo("localhost", 3031)
 	suite.betaSocket.ConnectTo("localhost", 3030)
 }
