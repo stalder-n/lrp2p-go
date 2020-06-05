@@ -87,9 +87,9 @@ func TestInsertRemove(t *testing.T) {
 		err := r.insertSequence(seg)
 		assert.NoError(t, err)
 	}
-	_, err := r.remove(3)
+	_, _, err := r.remove(3)
 	assert.NoError(t, err)
-	_, err = r.remove(1)
+	_, _, err = r.remove(1)
 	assert.NoError(t, err)
 
 	s := r.getTimedout(timeZero)
@@ -103,7 +103,7 @@ func TestInsertRemove2(t *testing.T) {
 	seg := makeSegment(0)
 	err := r.insertSequence(seg)
 	assert.NoError(t, err)
-	_, err = r.remove(0)
+	_, _, err = r.remove(0)
 	assert.NoError(t, err)
 	err = r.insertSequence(seg)
 	assert.Error(t, err)

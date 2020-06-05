@@ -7,24 +7,39 @@ import (
 
 type ringBufferSnd struct {
 	buffer     []*segment
-	size       uint32
+	s          uint32
 	r          uint32
 	w          uint32
 	timeoutSec int
 	prevSn     uint32
+	old        *ringBufferSnd
 }
 
 func NewRingBufferSnd(size uint32, timeoutSec int) *ringBufferSnd {
 	return &ringBufferSnd{
 		buffer:     make([]*segment, size+1),
-		size:       size + 1,
+		s:          size + 1,
 		timeoutSec: timeoutSec,
-		prevSn:     uint32(0xffffffff), // -1 % size
+		prevSn:     uint32(0xffffffff), // -1
+	}
+}
+
+func (ring *ringBufferSnd) size() uint32 {
+	return ring.s
+}
+
+func (ring *ringBufferSnd) resize(targetSize uint32) *ringBufferSnd {
+	if targetSize == ring.s {
+		return ring
+	} else {
+		r := NewRingBufferSnd(targetSize, ring.timeoutSec)
+		r.old = ring
+		return r
 	}
 }
 
 func (ring *ringBufferSnd) insertSequence(seg *segment) error {
-	if ((ring.w + 1) % ring.size) == ring.r { //is full
+	if ((ring.w + 1) % ring.s) == ring.r { //is full
 		return fmt.Errorf("ring buffer is full, cannot add %v/%v", ring.w, ring.r)
 	}
 	if ring.prevSn != seg.getSequenceNumber()-1 {
@@ -35,15 +50,18 @@ func (ring *ringBufferSnd) insertSequence(seg *segment) error {
 	}
 	ring.prevSn = seg.getSequenceNumber()
 	ring.buffer[ring.w] = seg
-	ring.w = (ring.w + 1) % ring.size
+	ring.w = (ring.w + 1) % ring.s
 	return nil
 }
 
 func (ring *ringBufferSnd) getTimedout(now time.Time) []*segment {
 	var ret []*segment
-	var i uint32
-	for ; i < ring.size; i++ {
-		index := (ring.r + i) % ring.size
+	if ring.old != nil {
+		ret = ring.old.getTimedout(now)
+	}
+
+	for i := uint32(0); i < ring.s; i++ {
+		index := (ring.r + i) % ring.s
 		seg := ring.buffer[index]
 		if seg != nil {
 			if seg.timestamp.Add(time.Second * time.Duration(ring.timeoutSec)).Before(now) {
@@ -61,25 +79,36 @@ func (ring *ringBufferSnd) getTimedout(now time.Time) []*segment {
 	return ret
 }
 
-func (ring *ringBufferSnd) remove(sequenceNumber uint32) (*segment, error) {
-	index := sequenceNumber % ring.size
+func (ring *ringBufferSnd) remove(sequenceNumber uint32) (*segment, bool, error) {
+	if ring.old != nil {
+		seg, empty, err := ring.old.remove(sequenceNumber)
+		if empty {
+			ring.old = nil
+		}
+		if err == nil {
+			return seg, empty, nil
+		}
+	}
+	index := sequenceNumber % ring.s
 	seg := ring.buffer[index]
 	if seg == nil {
-		return nil, fmt.Errorf("already removed %v", index)
+		return nil, false, fmt.Errorf("already removed %v", index)
 	}
 	if sequenceNumber != seg.getSequenceNumber() {
-		return nil, fmt.Errorf("sn mismatch %v/%v", sequenceNumber, seg.getSequenceNumber())
+		return nil, false, fmt.Errorf("sn mismatch %v/%v", sequenceNumber, seg.getSequenceNumber())
 	}
 	ring.buffer[index] = nil
 
-	for i := ring.r; i != ring.w; i = (i + 1) % ring.size {
+	empty := true
+	for i := ring.r; i != ring.w; i = (i + 1) % ring.s {
 		if ring.buffer[i] == nil {
-			ring.r = (i + 1) % ring.size
+			ring.r = (i + 1) % ring.s
 		} else {
+			empty = false
 			break
 		}
 	}
-	return seg, nil
+	return seg, empty, nil
 }
 
 func (ring *ringBufferSnd) timoutSec() int {
