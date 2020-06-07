@@ -158,9 +158,6 @@ func (arq *selectiveArq) hasAvailableSegments() bool {
 	return len(arq.segmentBuffer) > 0 && arq.segmentBuffer[0].getSequenceNumber() == arq.nextExpectedSequenceNumber
 }
 
-var loss = 0
-var to = 0
-
 func (arq *selectiveArq) computeCongestionWindow(t congestionType) {
 	switch t {
 	case noCongestion:
@@ -173,13 +170,11 @@ func (arq *selectiveArq) computeCongestionWindow(t congestionType) {
 			arq.cwnd = math.Max(wEst, wCubic)
 		}
 	case segmentLoss:
-		loss++
 		arq.wMax = arq.cwnd
 		arq.ssthresh = arq.cwnd * betaCubic
 		arq.ssthresh = math.Max(arq.ssthresh, 2)
 		arq.cwnd = math.Max(1, arq.cwnd*betaCubic)
 	case segmentTimeout:
-		to++
 		arq.wMax = arq.cwnd
 		arq.ssthresh = arq.cwnd * betaCubic
 		arq.ssthresh = math.Max(arq.ssthresh, 2)
