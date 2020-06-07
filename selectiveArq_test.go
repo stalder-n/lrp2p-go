@@ -42,6 +42,8 @@ func (suite *ArqTestSuite) SetupTest() {
 	suite.alphaArq, suite.alphaManipulator = newMockSelectiveRepeatArqConnection(connection1, "rttAlpha")
 	suite.betaArq, suite.betaManipulator = newMockSelectiveRepeatArqConnection(connection2, "rttBeta")
 	segmentMtu = headerLength + 32
+	suite.alphaArq.cwnd = 10
+	suite.betaArq.cwnd = 10
 }
 
 func (suite *ArqTestSuite) TearDownTest() {
@@ -120,6 +122,8 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
 }
 
 func (suite *ArqTestSuite) TestMeasureRTOWithSteadyRTT() {
+	suite.alphaArq.cwnd = 10
+	suite.betaArq.cwnd = 10
 	rttTimestamp := suite.timestamp.Add(100 * time.Millisecond)
 	suite.write(suite.alphaArq, repeatDataSize('A', 5), suite.timestamp)
 	suite.Equal(5, suite.alphaArq.rttToMeasure)
