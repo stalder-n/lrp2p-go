@@ -326,17 +326,3 @@ func (arq *selectiveArq) reportError(err error) {
 		arq.errorChannel <- err
 	}
 }
-
-func maxUint32(x, y uint32) uint32 {
-	if x > y {
-		return x
-	}
-	return y
-}
-
-func maxDuration(x, y time.Duration) time.Duration {
-	if x > y {
-		return x
-	}
-	return y
-}
