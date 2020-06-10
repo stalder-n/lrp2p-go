@@ -2,7 +2,6 @@ package atp
 
 import (
 	"github.com/stretchr/testify/suite"
-	"math/rand"
 	"time"
 )
 
@@ -102,7 +101,6 @@ func (manipulator *segmentManipulator) reportError(err error) {
 type connectionManipulator struct {
 	extension  connector
 	writeDelay time.Duration
-	jitter     time.Duration
 }
 
 func (manipulator *connectionManipulator) ConnectTo(remoteHost string, remotePort int) {
@@ -118,11 +116,7 @@ func (manipulator *connectionManipulator) Close() error {
 }
 
 func (manipulator *connectionManipulator) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	delay := manipulator.writeDelay
-	if manipulator.jitter > 0 {
-		delay = delay - time.Duration(rand.Intn(int(2*manipulator.jitter))-int(manipulator.jitter))
-	}
-	time.Sleep(delay)
+	time.Sleep(manipulator.writeDelay)
 	return manipulator.extension.Write(buffer, timestamp)
 }
 

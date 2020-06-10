@@ -37,18 +37,16 @@ func (suite *IntegrationTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaSocket.Close())
 }
 
-func (suite *IntegrationTestSuite) configureConnection(rtt, jitter time.Duration) {
+func (suite *IntegrationTestSuite) configureConnection(rtt time.Duration) {
 	suite.alphaConnectionManipulator.writeDelay = rtt / 2
-	suite.alphaConnectionManipulator.jitter = jitter / 2
 	suite.betaConnectionManipulator.writeDelay = rtt / 2
-	suite.betaConnectionManipulator.jitter = jitter / 2
 }
 
 func (suite *IntegrationTestSuite) TestStableLowLatencyConnection() {
 	if testing.Short() {
 		suite.T().Skip("Skipping integration test")
 	}
-	suite.configureConnection(10*time.Millisecond, 0)
+	suite.configureConnection(10 * time.Millisecond)
 	mutex := sync.WaitGroup{}
 	mutex.Add(2)
 	go func() {
@@ -58,8 +56,8 @@ func (suite *IntegrationTestSuite) TestStableLowLatencyConnection() {
 		mutex.Wait()
 	}()
 	go func() {
+		readBuffer := make([]byte, getDataChunkSize())
 		for {
-			readBuffer := make([]byte, getDataChunkSize())
 			_, err := suite.betaSocket.Read(readBuffer)
 			suite.handleTestError(err)
 			if string(readBuffer) == repeatDataSizeInc(0, 1) {
