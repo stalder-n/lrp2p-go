@@ -34,24 +34,27 @@ func (ring *ringBufferSnd) resize(targetSize uint32) *ringBufferSnd {
 	} else {
 		r := NewRingBufferSnd(targetSize, ring.timeoutSec)
 		r.old = ring
+		r.prevSn = ring.prevSn
+		r.w = ring.w % r.s
+		r.r = ring.r % r.s
 		return r
 	}
 }
 
-func (ring *ringBufferSnd) insertSequence(seg *segment) error {
+func (ring *ringBufferSnd) insertSequence(seg *segment) (bool, error) {
 	if ((ring.w + 1) % ring.s) == ring.r { //is full
-		return fmt.Errorf("ring buffer is full, cannot add %v/%v", ring.w, ring.r)
+		return false, nil
 	}
 	if ring.prevSn != seg.getSequenceNumber()-1 {
-		return fmt.Errorf("not a sequence, cannot add %v/%v", ring.prevSn, (seg.getSequenceNumber() - 1))
+		return false, fmt.Errorf("not a sequence, cannot add %v/%v", ring.prevSn, (seg.getSequenceNumber() - 1))
 	}
 	if ring.buffer[ring.w] != nil {
-		fmt.Errorf("not empty at pos %v", ring.w)
+		return false, fmt.Errorf("not empty at pos %v", ring.w)
 	}
 	ring.prevSn = seg.getSequenceNumber()
 	ring.buffer[ring.w] = seg
 	ring.w = (ring.w + 1) % ring.s
-	return nil
+	return true, nil
 }
 
 func (ring *ringBufferSnd) getTimedout(now time.Time) []*segment {
