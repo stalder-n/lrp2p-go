@@ -15,14 +15,9 @@ type SecurityTestSuite struct {
 	alphaConnector, betaConnector *channelConnector
 }
 
-func (suite *SecurityTestSuite) SetupTest() {
-	segmentMtu = 128
-}
-
 func (suite *SecurityTestSuite) TearDownTest() {
 	suite.handleTestError(suite.alphaSecurity.Close())
 	suite.handleTestError(suite.betaSecurity.Close())
-	segmentMtu = defaultMTU
 }
 
 func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
@@ -51,7 +46,8 @@ func (suite *SecurityTestSuite) mockConnections(peerKeyKnown bool) {
 }
 
 func (suite *SecurityTestSuite) exchangeGreeting() {
-	expected := "Hello, World!"
+	//	expected := "Hello, World!"
+	expected := repeatDataSize(1, 1)
 	group := sync.WaitGroup{}
 	group.Add(2)
 	go func() {

@@ -31,7 +31,7 @@ var sequenceNumberPosition = position{2, 6}
 var windowSizePosition = position{6, 10}
 
 func getDataChunkSize() int {
-	return segmentMtu - headerLength
+	return segmentMtu - headerLength - authDataSize
 }
 
 func bytesToUint32(buffer []byte) uint32 {

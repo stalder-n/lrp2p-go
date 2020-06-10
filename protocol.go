@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	defaultMTU   = 1024
+	defaultMTU   = 1400
 	headerLength = 6
+	authDataSize = 64
 )
 
 type statusCode int
@@ -33,8 +34,6 @@ type position struct {
 	Start int
 	End   int
 }
-
-var timeoutCheckInterval = 100 * time.Millisecond
 
 var timeZero = time.Time{}
 
@@ -227,8 +226,8 @@ func (socket *Socket) Close() error {
 func (socket *Socket) Write(buffer []byte) (int, error) {
 	_, _, err := socket.connection.Write(buffer, time.Now())
 	if !socket.isReadWriting {
-		go socket.read()
 		go socket.write()
+		go socket.read()
 		socket.isReadWriting = true
 	}
 	return len(buffer), err

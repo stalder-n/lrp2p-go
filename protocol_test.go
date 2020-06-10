@@ -18,8 +18,8 @@ func (suite *UDPConnectorTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnection, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnection.ConnectTo("localhost", 3031)
-	betaConnection.ConnectTo("localhost", 3030)
+	alphaConnection.ConnectTo(localhost, 3031)
+	betaConnection.ConnectTo(localhost, 3030)
 	suite.alphaConnection = alphaConnection
 	suite.betaConnection = betaConnection
 }
@@ -29,7 +29,7 @@ func (suite *UDPConnectorTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaConnection.Close())
 }
 
-func (suite *UDPConnectorTestSuite) TestSimpleGreeting() {
+func (suite *UDPConnectorTestSuite) TestSimpleUDPConnection() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
@@ -54,8 +54,8 @@ func (suite *SecureConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
+	alphaConnector.ConnectTo(localhost, 3031)
+	betaConnector.ConnectTo(localhost, 3030)
 	suite.alphaConnection = newSecurityExtension(alphaConnector, nil, nil, testErrorChannel)
 	suite.betaConnection = newSecurityExtension(betaConnector, nil, nil, testErrorChannel)
 }
@@ -65,7 +65,7 @@ func (suite *SecureConnectionTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaConnection.Close())
 }
 
-func (suite *SecureConnectionTestSuite) TestSimpleGreeting() {
+func (suite *SecureConnectionTestSuite) TestSecureGreeting() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
@@ -99,10 +99,12 @@ func (suite *ArqConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
+	alphaConnector.ConnectTo(localhost, 3031)
+	betaConnector.ConnectTo(localhost, 3030)
 	suite.alphaConnection = newSelectiveArq(1, alphaConnector, testErrorChannel)
 	suite.betaConnection = newSelectiveArq(1, betaConnector, testErrorChannel)
+	suite.alphaConnection.SetReadTimeout(0)
+	suite.betaConnection.SetReadTimeout(0)
 }
 
 func (suite *ArqConnectionTestSuite) TearDownTest() {
@@ -110,7 +112,7 @@ func (suite *ArqConnectionTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaConnection.Close())
 }
 
-func (suite *ArqConnectionTestSuite) TestSimpleGreeting() {
+func (suite *ArqConnectionTestSuite) TestSimpleArqConnection() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
@@ -138,11 +140,12 @@ func (suite *FullConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
+	alphaConnector.ConnectTo(localhost, 3031)
+	betaConnector.ConnectTo(localhost, 3030)
 	suite.alphaConnection = connect(alphaConnector, testErrorChannel)
 	suite.betaConnection = connect(betaConnector, testErrorChannel)
-
+	suite.alphaConnection.SetReadTimeout(0)
+	suite.betaConnection.SetReadTimeout(0)
 }
 
 func (suite *FullConnectionTestSuite) TearDownTest() {
@@ -150,7 +153,7 @@ func (suite *FullConnectionTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaConnection.Close())
 }
 
-func (suite *FullConnectionTestSuite) TestSimpleGreeting() {
+func (suite *FullConnectionTestSuite) TestSimpleFullConnection() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	timestamp := time.Now()
@@ -160,12 +163,10 @@ func (suite *FullConnectionTestSuite) TestSimpleGreeting() {
 		suite.write(suite.alphaConnection, expectedAlpha, timestamp)
 		suite.readAck(suite.alphaConnection, timestamp)
 		suite.read(suite.alphaConnection, expectedBeta, timestamp)
-		suite.readExpectStatus(suite.alphaConnection, timeout, suite.timeout())
 		mutex.Done()
 	}()
 	go func() {
 		suite.read(suite.betaConnection, expectedAlpha, timestamp)
-		suite.readExpectStatus(suite.betaConnection, timeout, suite.timeout())
 		suite.write(suite.betaConnection, expectedBeta, timestamp)
 		suite.readAck(suite.betaConnection, timestamp)
 		mutex.Done()
@@ -195,7 +196,7 @@ func (suite *SocketTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaSocket.Close())
 }
 
-func (suite *SocketTestSuite) TestSimpleGreeting() {
+func (suite *SocketTestSuite) TestSimpleSocketConnection() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
 	mutex := sync.WaitGroup{}

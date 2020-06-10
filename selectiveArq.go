@@ -62,7 +62,7 @@ type selectiveArq struct {
 }
 
 const initialReceiverWindowSize = uint32(1<<16 - 1)
-const defaultArqTimeout = 10 * time.Millisecond
+const defaultArqTimeout = 1 * time.Millisecond
 const rttAlpha, rttBeta = 0.125, 0.25
 const betaCubic float64 = 0.7
 const defaultAggressiveness = 1
@@ -75,10 +75,8 @@ const (
 	segmentTimeout
 )
 
-var arqTimeout = defaultArqTimeout
-
 func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
-	extension.SetReadTimeout(arqTimeout)
+	extension.SetReadTimeout(defaultArqTimeout)
 	return &selectiveArq{
 		extension:             extension,
 		errorChannel:          errors,
@@ -159,6 +157,7 @@ func (arq *selectiveArq) hasAvailableSegments() bool {
 }
 
 func (arq *selectiveArq) computeCongestionWindow(t congestionType) {
+	mult := betaCubic
 	switch t {
 	case noCongestion:
 		if arq.cwnd < arq.ssthresh {
@@ -169,16 +168,15 @@ func (arq *selectiveArq) computeCongestionWindow(t congestionType) {
 			wCubic := arq.cwnd + (arq.computeWCubic(t+arq.sRtt)-arq.cwnd)/arq.cwnd
 			arq.cwnd = math.Max(wEst, wCubic)
 		}
+	case segmentTimeout:
+		mult = 0.5
+		fallthrough
 	case segmentLoss:
 		arq.wMax = arq.cwnd
 		arq.ssthresh = arq.cwnd * betaCubic
 		arq.ssthresh = math.Max(arq.ssthresh, 2)
-		arq.cwnd = math.Max(1, arq.cwnd*betaCubic)
-	case segmentTimeout:
-		arq.wMax = arq.cwnd
-		arq.ssthresh = arq.cwnd * betaCubic
-		arq.ssthresh = math.Max(arq.ssthresh, 2)
-		arq.cwnd = arq.cwnd * 0.5
+		arq.cwnd = math.Max(1, arq.cwnd*mult)
+
 	}
 	arq.lastCongestionType = t
 }
