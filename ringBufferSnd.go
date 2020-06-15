@@ -70,8 +70,6 @@ func (ring *ringBufferSnd) getTimedout(now time.Time) []*segment {
 		if seg != nil {
 			if seg.timestamp.Add(time.Second * time.Duration(ring.timeoutSec)).Before(now) {
 				ret = append(ret, seg)
-			} else {
-				break
 			}
 		}
 
