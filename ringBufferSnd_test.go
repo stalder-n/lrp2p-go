@@ -40,8 +40,8 @@ func TestFullSnd(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	seg := makeSegment(11)
-	_, err := r.insertSequence(seg)
-	assert.Error(t, err)
+	full, _ := r.insertSequence(seg)
+	assert.False(t, full)
 }
 
 func TestRemove(t *testing.T) {
@@ -124,8 +124,8 @@ func TestAlmostFull(t *testing.T) {
 	}
 	r.remove(4)
 	seg := makeSegment(10)
-	_, err := r.insertSequence(seg)
-	assert.Error(t, err)
+	full, err := r.insertSequence(seg)
+	assert.False(t, full)
 	r.remove(0)
 
 	seg = makeSegment(10)
