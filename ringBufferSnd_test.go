@@ -140,13 +140,10 @@ func TestFuzz(t *testing.T) {
 	seqRem := 0
 	rand.Seed(42)
 
-	for j := 0; j < 1000000; j++ {
+	for j := 0; j < 100000; j++ {
 		rnd := rand.Intn(10) + 1
 
 		for i := 0; i < rnd; i++ {
-			if seqIns == 32 {
-				print("aue")
-			}
 			seg := makeSegment(uint32(seqIns))
 
 			ins, err := r.insertSequence(seg)
@@ -156,17 +153,14 @@ func TestFuzz(t *testing.T) {
 			if !ins {
 				rnd = i + 1
 				break
+			} else {
+				seqIns++
 			}
-			seqIns++
 		}
 
 		rnd2 := rand.Intn(rnd) + 1
 		if rand.Intn(2) == 0 {
 			rnd2 = rand.Intn(seqIns-seqRem) + 1
-		}
-
-		if j == 5 {
-			print("aeu")
 		}
 
 		for i := 0; i < rnd2; i++ {
@@ -179,11 +173,11 @@ func TestFuzz(t *testing.T) {
 		}
 
 		if rand.Intn(3) == 0 {
-			r = r.resize(r.size() + 1)
+			_, r = r.resize(r.size() + 1)
 		}
 
-		s := r.getTimedout(timeZero.Add(time.Hour))
-		fmt.Printf("size: %v\n", len(s))
+		//s := r.getTimedout(timeZero.Add(time.Hour))
+		//fmt.Printf("size: %v\n", len(s))
 
 	}
 	fmt.Printf("send %v, recv %v", seqIns, seqRem)

@@ -13,6 +13,7 @@ type ringBufferSnd struct {
 	timeoutSec int
 	prevSn     uint32
 	old        *ringBufferSnd
+	newSize    uint32
 }
 
 func NewRingBufferSnd(size uint32, timeoutSec int) *ringBufferSnd {
@@ -25,19 +26,19 @@ func NewRingBufferSnd(size uint32, timeoutSec int) *ringBufferSnd {
 }
 
 func (ring *ringBufferSnd) size() uint32 {
-	return ring.s
+	return ring.s - 1
 }
 
-func (ring *ringBufferSnd) resize(targetSize uint32) *ringBufferSnd {
-	if targetSize == ring.s {
-		return ring
+func (ring *ringBufferSnd) resize(targetSize uint32) (bool, *ringBufferSnd) {
+	if targetSize == ring.size() || ring.old != nil {
+		return false, ring
 	} else {
 		r := NewRingBufferSnd(targetSize, ring.timeoutSec)
 		r.old = ring
 		r.prevSn = ring.prevSn
-		r.w = ring.w % r.s
-		r.r = ring.r % r.s
-		return r
+		r.w = (r.prevSn + 1) % r.s
+		r.r = r.w
+		return true, r
 	}
 }
 
@@ -87,6 +88,7 @@ func (ring *ringBufferSnd) remove(sequenceNumber uint32) (*segment, bool, error)
 		seg, empty, err := ring.old.remove(sequenceNumber)
 		if empty {
 			ring.old = nil
+			empty = false
 		}
 		if err == nil {
 			return seg, empty, nil
