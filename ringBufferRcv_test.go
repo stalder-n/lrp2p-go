@@ -1,7 +1,9 @@
 package atp
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -127,4 +129,37 @@ func makeSegment(data uint32) *segment {
 		data:           nil,
 		timestamp:      time.Time{},
 	}
+}
+
+func TestFuzz2(t *testing.T) {
+	r := NewRingBufferRcv(10)
+
+	seqIns := 0
+	seqRem := 0
+	rand.Seed(42)
+
+	for j := 0; j < 10000; j++ {
+		rnd := rand.Intn(int(r.s)) + 1
+
+		for i := rnd - 1; i >= 0; i-- {
+			seg := makeSegment(uint32(seqIns + i))
+			err := r.insert(seg)
+			if err != nil {
+				assert.NoError(t, err)
+				r.insert(seg)
+			}
+		}
+		seqIns += rnd
+
+		r.removeSequence()
+
+		if rand.Intn(3) == 0 {
+			r = r.resize(r.size() + 1)
+		}
+
+		//s := r.getTimedout(timeZero.Add(time.Hour))
+		//fmt.Printf("size: %v\n", len(s))
+
+	}
+	fmt.Printf("send %v, recv %v", seqIns, seqRem)
 }

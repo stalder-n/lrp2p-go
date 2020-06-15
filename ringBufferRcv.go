@@ -29,23 +29,28 @@ func (ring *ringBufferRcv) resize(targetSize uint32) *ringBufferRcv {
 		return ring
 	} else {
 		r := NewRingBufferRcv(targetSize)
+		r.minSn = ring.minSn
+		r.r = (r.minSn + 1) % r.s
 		r.old = make([]*segment, ring.s)
 		i := 0
 		for _, v := range ring.buffer {
+			if v == nil {
+				continue
+			}
 			err := r.insert(v)
 			if err != nil {
 				r.old[i] = v
 				i++
 			}
-			r.old = r.old[:i]
 		}
+		r.old = r.old[:i]
 		return r
 	}
 }
 
 func (ring *ringBufferRcv) insert(seg *segment) error {
 	sn := seg.getSequenceNumber()
-	if sn > (ring.minSn + ring.s) { //is full
+	if sn > ((ring.minSn + 1) + ring.s) { //is full
 		return fmt.Errorf("ring buffer is full, cannot add %v/%v", ring.minSn, sn)
 	}
 	index := sn % ring.s
