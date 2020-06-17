@@ -11,11 +11,6 @@ import (
 )
 
 const (
-	flagACK byte = 1
-	flagSYN byte = 2
-)
-
-const (
 	defaultMTU   = 1024
 	headerLength = 6
 )
@@ -39,7 +34,6 @@ type position struct {
 	End   int
 }
 
-var retransmissionTimeout = 200 * time.Millisecond
 var timeoutCheckInterval = 100 * time.Millisecond
 
 var timeZero = time.Time{}
@@ -93,8 +87,8 @@ type udpConnector struct {
 const timeoutErrorString = "i/o timeout"
 const connectionClosedErrorString = "use of closed network connection"
 
-func udpListen(localPort int, errorChannel chan error) (*udpConnector, error) {
-	localAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("", strconv.Itoa(localPort)))
+func udpListen(host string, localPort int, errorChannel chan error) (*udpConnector, error) {
+	localAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(host, strconv.Itoa(localPort)))
 	connection, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
 		return nil, err
@@ -186,9 +180,9 @@ type Socket struct {
 const retryTimeout = 10 * time.Millisecond
 
 // SocketListen creates a socket listening on the specified local port for a connection
-func SocketListen(localPort int) *Socket {
+func SocketListen(host string, localPort int) *Socket {
 	errorChannel := make(chan error, 100)
-	connector, err := udpListen(localPort, errorChannel)
+	connector, err := udpListen(host, localPort, errorChannel)
 	reportError(err)
 	return newSocket(connector, errorChannel)
 }
@@ -310,7 +304,7 @@ func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 func (socket *Socket) checkForSegmentTimeout() {
 	for {
 		select {
-		case <-time.After(timeoutCheckInterval):
+		case <-time.After(socket.connection.rto):
 			_, _, err := socket.connection.Write(nil, time.Now())
 			reportError(err)
 		}
