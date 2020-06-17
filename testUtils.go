@@ -10,6 +10,8 @@ type atpTestSuite struct {
 	timestamp time.Time
 }
 
+const localhost = "127.0.0.1"
+
 var testErrorChannel chan error
 
 func init() {

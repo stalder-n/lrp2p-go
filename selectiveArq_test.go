@@ -39,9 +39,11 @@ func (suite *ArqTestSuite) SetupTest() {
 		out:           endpoint1,
 		artificialNow: suite.timestamp,
 	}
-	suite.alphaArq, suite.alphaManipulator = newMockSelectiveRepeatArqConnection(connection1, "alpha")
-	suite.betaArq, suite.betaManipulator = newMockSelectiveRepeatArqConnection(connection2, "beta")
+	suite.alphaArq, suite.alphaManipulator = newMockSelectiveRepeatArqConnection(connection1, "rttAlpha")
+	suite.betaArq, suite.betaManipulator = newMockSelectiveRepeatArqConnection(connection2, "rttBeta")
 	segmentMtu = headerLength + 32
+	suite.alphaArq.cwnd = 10
+	suite.betaArq.cwnd = 10
 }
 
 func (suite *ArqTestSuite) TearDownTest() {
@@ -51,7 +53,6 @@ func (suite *ArqTestSuite) TearDownTest() {
 }
 
 func (suite *ArqTestSuite) TestSimpleWrite() {
-	suite.betaArq.ackThreshold = 1
 	suite.write(suite.alphaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
@@ -59,49 +60,52 @@ func (suite *ArqTestSuite) TestSimpleWrite() {
 }
 
 func (suite *ArqTestSuite) TestWriteTwoSegments() {
-	suite.betaArq.ackThreshold = 2
 	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
 func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
-	suite.betaArq.ackThreshold = 3
 	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
 	suite.readExpectStatus(suite.betaArq, timeout, suite.timeout())
 	suite.readAck(suite.alphaArq, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.Empty(suite.alphaArq.waitingForAck)
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
-func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnAck() {
-	suite.betaArq.ackThreshold = 3
+func (suite *ArqTestSuite) TestRetransmitLostSegmentOnAck() {
 	suite.alphaManipulator.DropOnce(2)
-	suite.alphaManipulator.DropOnce(3)
 	suite.write(suite.alphaArq, repeatDataSize('A', 5), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
-	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
-	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
-
 	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.write(suite.alphaArq, "", suite.timestamp)
+
+	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+
+	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+
+	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
+
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
+	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('D', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('E', 1), suite.timestamp)
-	suite.readAck(suite.alphaArq, suite.timestamp)
 
 	suite.Empty(suite.alphaArq.waitingForAck)
-	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
+	suite.Empty(suite.betaArq.segmentBuffer)
 }
 
 func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
-	suite.betaArq.ackThreshold = 1
 	suite.alphaManipulator.DropOnce(2)
 	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
@@ -109,7 +113,7 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.Len(suite.alphaArq.waitingForAck, 1)
 
-	suite.write(suite.alphaArq, "", suite.timestamp.Add(retransmissionTimeout+1))
+	suite.write(suite.alphaArq, "", suite.timestamp.Add(suite.alphaArq.rto+1))
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
 
@@ -117,34 +121,42 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
 	suite.readExpectStatus(suite.alphaArq, timeout, suite.timeout())
 }
 
-func (suite *ArqTestSuite) TestIncreaseCongestionWindowByAckedSegments() {
-	suite.betaArq.ackThreshold = 3
-	suite.Equal(initialCongestionWindowSize, suite.alphaArq.congestionWindow)
-	suite.write(suite.alphaArq, repeatDataSize('A', 3), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
-	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
-	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.Equal(uint32(8), suite.alphaArq.congestionWindow)
-}
-
-func (suite *ArqTestSuite) TestIncreaseCongestionWindowByAckedAndLostSegments() {
-	suite.betaArq.ackThreshold = 3
-	suite.alphaManipulator.DropOnce(3)
-	suite.alphaManipulator.DropOnce(4)
-	suite.Equal(initialCongestionWindowSize, suite.alphaArq.congestionWindow)
+func (suite *ArqTestSuite) TestMeasureRTOWithSteadyRTT() {
+	suite.alphaArq.cwnd = 10
+	suite.betaArq.cwnd = 10
+	rttTimestamp := suite.timestamp.Add(100 * time.Millisecond)
 	suite.write(suite.alphaArq, repeatDataSize('A', 5), suite.timestamp)
+	suite.Equal(5, suite.alphaArq.rttToMeasure)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
-	suite.readExpectStatus(suite.betaArq, invalidSegment, suite.timestamp)
-	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.Equal(uint32(6), suite.alphaArq.congestionWindow)
-	suite.write(suite.alphaArq, "", suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('D', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('E', 1), suite.timestamp)
-	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.Equal(uint32(8), suite.alphaArq.congestionWindow)
+
+	suite.readAck(suite.alphaArq, rttTimestamp)
+	suite.assertRTTValues(suite.alphaArq, 100, 50, 300)
+
+	suite.readAck(suite.alphaArq, rttTimestamp)
+	suite.assertRTTValues(suite.alphaArq, 100, 37.5, 250)
+
+	suite.readAck(suite.alphaArq, rttTimestamp)
+	suite.assertRTTValues(suite.alphaArq, 100, 28.125, 212.5)
+
+	suite.readAck(suite.alphaArq, rttTimestamp)
+	suite.assertRTTValues(suite.alphaArq, 100, 0, 200)
+
+	suite.readAck(suite.alphaArq, rttTimestamp)
+	suite.assertRTTValues(suite.alphaArq, 100, 0, 200)
+
+	suite.Equal(0, suite.alphaArq.rttToMeasure)
+}
+
+func (suite *ArqTestSuite) assertRTTValues(arq *selectiveArq, sRtt, rttVar float64, rto float64) {
+	suite.Equal(sRtt*1e6, arq.sRtt)
+	if rttVar > 0 {
+		suite.Equal(rttVar*1e6, arq.rttVar)
+	}
+	suite.Equal(time.Duration(rto*1e6), arq.rto)
 }
 
 func TestSelectiveRepeatArq(t *testing.T) {

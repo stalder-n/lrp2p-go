@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-    socket := atp.SocketListen(3030)
+    socket := atp.SocketListen("127.0.0.1", 3030)
     socket.ConnectTo("localhost", 3031)
     _, err := socket.Write([]byte("Hello World"))
     if err != nil {
@@ -42,7 +42,7 @@ import (
 )
 
 func main() {
-    socket := atp.SocketListen(3031)
+    socket := atp.SocketListen("127.0.0.1", 3031)
     socket.ConnectTo("localhost", 3030)
     readBuffer := make([]byte, 32)
     n, err := socket.Read(readBuffer)

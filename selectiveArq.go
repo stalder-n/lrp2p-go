@@ -1,6 +1,7 @@
 package atp
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -36,41 +37,64 @@ type selectiveArq struct {
 	// receiver
 	nextExpectedSequenceNumber uint32
 	segmentBuffer              []*segment
-	queuedForAck               []uint32
-	segsSinceLastAck           int
-	ackThreshold               int
 	receiverWindow             uint32
 
 	// sender
 	currentSequenceNumber uint32
 	writeQueue            []*segment
 	waitingForAck         []*segment
-	congestionWindow      uint32
 	sendSynFlag           bool
+
+	// CUBIC
+	cwnd                float64
+	wMax                float64
+	ssthresh            float64
+	aggressiveness      float64
+	lastCongestionEvent time.Time
+	lastCongestionType  congestionType
+
+	// RTT
+	rttToMeasure int
+	granularity  float64       // clock granularity
+	sRtt         float64       // smoothed round-trip time
+	rttVar       float64       // round-trip time variation
+	rto          time.Duration // retransmission timeout
 }
 
-const defaultArqTimeout = 10 * time.Millisecond
-const initialCongestionWindowSize = uint32(0x5)
 const initialReceiverWindowSize = uint32(1<<16 - 1)
-const defaultAckThreshold = 5
+const defaultArqTimeout = 10 * time.Millisecond
+const rttAlpha, rttBeta = 0.125, 0.25
+const betaCubic float64 = 0.7
+const defaultAggressiveness = 1
+
+type congestionType int
+
+const (
+	noCongestion congestionType = iota
+	segmentLoss
+	segmentTimeout
+)
 
 var arqTimeout = defaultArqTimeout
 
 func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
 	extension.SetReadTimeout(arqTimeout)
 	return &selectiveArq{
-		extension:                  extension,
-		errorChannel:               errors,
-		nextExpectedSequenceNumber: 0,
-		ackThreshold:               defaultAckThreshold,
-		segmentBuffer:              make([]*segment, 0),
-		queuedForAck:               make([]uint32, 0, defaultAckThreshold),
-		currentSequenceNumber:      initialSequenceNumber,
-		writeQueue:                 make([]*segment, 0),
-		waitingForAck:              make([]*segment, 0),
-		receiverWindow:             initialReceiverWindowSize,
-		congestionWindow:           initialCongestionWindowSize,
-		sendSynFlag:                true,
+		extension:             extension,
+		errorChannel:          errors,
+		segmentBuffer:         make([]*segment, 0),
+		currentSequenceNumber: initialSequenceNumber,
+		writeQueue:            make([]*segment, 0),
+		waitingForAck:         make([]*segment, 0),
+		receiverWindow:        initialReceiverWindowSize,
+		sendSynFlag:           true,
+		cwnd:                  1,
+		aggressiveness:        defaultAggressiveness,
+		ssthresh:              float64(initialReceiverWindowSize / 10),
+		lastCongestionEvent:   time.Now(),
+		rttToMeasure:          5,
+		granularity:           float64(100 * time.Millisecond),
+		rto:                   1 * time.Second,
 	}
 }
 
@@ -80,105 +104,138 @@ func (arq *selectiveArq) getAndIncrementCurrentSequenceNumber() uint32 {
 	return result
 }
 
+func (arq *selectiveArq) measureRTT(seg *segment, timestamp time.Time) {
+	if arq.rttToMeasure <= 0 {
+		return
+	}
+	rtt := float64(timestamp.Sub(seg.timestamp))
+	if arq.sRtt == 0 {
+		arq.sRtt = rtt
+		arq.rttVar = arq.sRtt / 2
+		arq.rto = time.Duration(arq.sRtt + math.Max(arq.granularity, 4*arq.rttVar))
+	} else {
+		arq.rttVar = (1-rttBeta)*arq.rttVar + rttBeta*math.Abs(arq.sRtt-rtt)
+		arq.sRtt = (1-rttAlpha)*arq.sRtt + rttAlpha*rtt
+		arq.rto = time.Duration(arq.sRtt + math.Max(arq.granularity, 4*arq.rttVar))
+	}
+	arq.rttToMeasure--
+}
+
 func (arq *selectiveArq) handleAck(ack *segment, timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
 
-	nums := ackSegmentToSequenceNumbers(ack)
-	for _, num := range nums {
-		_, arq.waitingForAck = removeSegment(arq.waitingForAck, num)
+	lastInOrder := ack.getSequenceNumber()
+	ackedSequence := bytesToUint32(ack.data[:4])
+	var ackedSeg *segment
+	ackedSeg, arq.waitingForAck = removeSegment(arq.waitingForAck, ackedSequence)
+	if ackedSeg == nil || ackedSequence < lastInOrder {
+		return
 	}
+	arq.measureRTT(ackedSeg, timestamp)
 
-	var removed []*segment
-	removed, arq.waitingForAck = removeAllSegmentsWhere(arq.waitingForAck, func(seg *segment) bool {
-		return seg.getSequenceNumber() < nums[len(nums)-1]
-	})
-
-	for _, seg := range removed {
-		arq.writeQueue = insertSegmentInOrder(arq.writeQueue, seg)
+	congType := noCongestion
+	if len(arq.waitingForAck) > 0 && (ackedSequence-lastInOrder) >= arq.waitingForAck[0].retransmitThresh {
+		var retransmit *segment
+		retransmit, arq.waitingForAck = arq.waitingForAck[0], arq.waitingForAck[1:]
+		retransmit.retransmitThresh += defaultRetransmitThresh
+		arq.writeQueue = insertSegmentInOrder(arq.writeQueue, retransmit)
+		_, _, _ = arq.writeQueuedSegments(timestamp)
+		congType = segmentLoss
 	}
-	arq.increaseCongestionWindow(uint32(len(nums)-len(removed)), ack.getWindowSize())
-	_, _, _ = arq.writeQueuedSegments(timestamp)
+	arq.computeCongestionWindow(congType)
 }
 
-func (arq *selectiveArq) writeAck(timestamp time.Time) {
+func (arq *selectiveArq) writeAck(seg *segment, timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
-	ack := createAckSegment(arq.nextExpectedSequenceNumber-1, arq.receiverWindow, arq.queuedForAck)
-	arq.queuedForAck = make([]uint32, 0, arq.ackThreshold)
+	ack := createAckSegment(arq.nextExpectedSequenceNumber-1, seg.getSequenceNumber(), arq.receiverWindow)
 	ack.timestamp = timestamp
 	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
-	arq.segsSinceLastAck = 0
 }
 
 func (arq *selectiveArq) hasAvailableSegments() bool {
 	return len(arq.segmentBuffer) > 0 && arq.segmentBuffer[0].getSequenceNumber() == arq.nextExpectedSequenceNumber
 }
 
-func max(x, y uint32) uint32 {
-	if x > y {
-		return x
+func (arq *selectiveArq) computeCongestionWindow(t congestionType) {
+	switch t {
+	case noCongestion:
+		if arq.cwnd < arq.ssthresh {
+			arq.cwnd++
+		} else {
+			t := float64(time.Now().Sub(arq.lastCongestionEvent))
+			wEst := arq.estimateTCPWindow(t)
+			wCubic := arq.cwnd + (arq.computeWCubic(t+arq.sRtt)-arq.cwnd)/arq.cwnd
+			arq.cwnd = math.Max(wEst, wCubic)
+		}
+	case segmentLoss:
+		arq.wMax = arq.cwnd
+		arq.ssthresh = arq.cwnd * betaCubic
+		arq.ssthresh = math.Max(arq.ssthresh, 2)
+		arq.cwnd = math.Max(1, arq.cwnd*betaCubic)
+	case segmentTimeout:
+		arq.wMax = arq.cwnd
+		arq.ssthresh = arq.cwnd * betaCubic
+		arq.ssthresh = math.Max(arq.ssthresh, 2)
+		arq.cwnd = arq.cwnd * 0.5
 	}
-	return y
+	arq.lastCongestionType = t
 }
 
-func (arq *selectiveArq) reduceCongestionWindow() {
-	arq.congestionWindow = max(arq.congestionWindow/2, initialCongestionWindowSize)
-}
-
-func (arq *selectiveArq) increaseCongestionWindow(add, recvWindow uint32) {
-	if arq.congestionWindow+add > recvWindow {
-		arq.congestionWindow = recvWindow
-	} else if arq.congestionWindow+add < initialCongestionWindowSize {
-		arq.congestionWindow = initialCongestionWindowSize
+func (arq *selectiveArq) computeWCubic(t float64) float64 {
+	seconds := t / float64(time.Second)
+	var K float64
+	if arq.lastCongestionType == segmentTimeout {
+		K = 0
 	} else {
-		arq.congestionWindow += add
+		K = arq.computeK()
 	}
+	return arq.aggressiveness*math.Pow(seconds-K, 3) + arq.wMax
+}
+
+func (arq *selectiveArq) computeK() float64 {
+	return math.Pow(arq.wMax*(1-betaCubic)/arq.aggressiveness, 1.0/3.0)
+}
+
+func (arq *selectiveArq) estimateTCPWindow(t float64) float64 {
+	seconds := t / float64(time.Second)
+	rttSeconds := arq.sRtt / float64(time.Second)
+	return arq.wMax*betaCubic + 3*(1-betaCubic)/(1+betaCubic) + (seconds / rttSeconds)
+}
+
+func (arq *selectiveArq) handleSuccess(receivedSeg *segment, timestamp time.Time) statusCode {
+	if receivedSeg.isFlaggedAs(flagACK) {
+		arq.handleAck(receivedSeg, timestamp)
+		return ackReceived
+	}
+	if arq.nextExpectedSequenceNumber == 0 && !receivedSeg.isFlaggedAs(flagSYN) {
+		return fail
+	} else if arq.nextExpectedSequenceNumber == 0 {
+		arq.nextExpectedSequenceNumber = receivedSeg.getSequenceNumber()
+	}
+	if receivedSeg.getSequenceNumber() >= arq.nextExpectedSequenceNumber {
+		arq.segmentBuffer = insertSegmentInOrder(arq.segmentBuffer, receivedSeg)
+	}
+	arq.writeAck(receivedSeg, timestamp)
+	return success
 }
 
 func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	buf := make([]byte, len(buffer))
 	status, n, err := arq.extension.Read(buf, timestamp)
 
-	switch status {
-	case success:
-		receivedSeg := createSegment(buf[:n])
-		if receivedSeg.isFlaggedAs(flagACK) {
-			arq.handleAck(receivedSeg, timestamp)
-			return ackReceived, 0, err
-		}
-		if arq.nextExpectedSequenceNumber == 0 && !receivedSeg.isFlaggedAs(flagSYN) {
-			return fail, 0, err
-		} else if arq.nextExpectedSequenceNumber == 0 {
-			arq.nextExpectedSequenceNumber = receivedSeg.getSequenceNumber()
-		}
-		if receivedSeg.getSequenceNumber() < arq.nextExpectedSequenceNumber {
-			arq.writeAck(timestamp)
-			return invalidSegment, 0, err
-		}
-		arq.segmentBuffer = insertSegmentInOrder(arq.segmentBuffer, receivedSeg)
-		arq.queuedForAck = insertUin32InOrder(arq.queuedForAck, receivedSeg.getSequenceNumber())
-		arq.segsSinceLastAck++
-	case timeout:
-		if arq.nextExpectedSequenceNumber > 0 && arq.segsSinceLastAck > 0 {
-			arq.writeAck(timestamp)
-		}
-	default:
-		return status, 0, err
+	if status == success {
+		status = arq.handleSuccess(createSegment(buf[:n]), timestamp)
 	}
+
 	var seg *segment
 	if arq.hasAvailableSegments() {
 		seg, arq.segmentBuffer = popSegment(arq.segmentBuffer)
 		arq.nextExpectedSequenceNumber++
-		if arq.segsSinceLastAck >= arq.ackThreshold {
-			arq.writeAck(timestamp)
-		}
 		copy(buffer, seg.data)
 		return success, len(seg.data), err
 	} else if status == success {
-		if arq.segsSinceLastAck >= arq.ackThreshold {
-			arq.writeAck(timestamp)
-		}
 		return invalidSegment, 0, err
 	}
 	return status, 0, err
@@ -212,10 +269,10 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
 	removed := make([]*segment, 0, len(arq.waitingForAck))
 	removed, arq.waitingForAck = removeAllSegmentsWhere(arq.waitingForAck, func(seg *segment) bool {
-		return seg.hasTimedOut(timestamp)
+		return timestamp.After(seg.timestamp.Add(arq.rto))
 	})
 	if len(removed) > 0 {
-		arq.reduceCongestionWindow()
+		arq.computeCongestionWindow(segmentTimeout)
 	}
 	for _, seg := range removed {
 		arq.writeQueue = insertSegmentInOrder(arq.writeQueue, seg)
@@ -225,7 +282,7 @@ func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
 func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
 	sumN := 0
 	for len(arq.writeQueue) > 0 {
-		if uint32(len(arq.waitingForAck)) >= arq.congestionWindow {
+		if len(arq.waitingForAck) >= int(arq.cwnd) {
 			return windowFull, sumN, nil
 		}
 		seg := arq.writeQueue[0]
