@@ -1,16 +1,14 @@
 package atp
 
-import "fmt"
-
 //size of RTO could be measured by RTT and bandwidth
 //https://www.sciencedirect.com/topics/computer-science/maximum-window-size
 
 type ringBufferRcv struct {
-	buffer []*segment
-	s      uint32
-	r      uint32
-	minSn  uint32
-	old    []*segment
+	buffer    []*segment
+	s         uint32
+	r         uint32
+	minGoodSn uint32
+	old       []*segment
 }
 
 func NewRingBufferRcv(size uint32) *ringBufferRcv {
@@ -29,36 +27,41 @@ func (ring *ringBufferRcv) resize(targetSize uint32) *ringBufferRcv {
 		return ring
 	} else {
 		r := NewRingBufferRcv(targetSize)
-		r.minSn = ring.minSn
-		r.r = (r.minSn + 1) % r.s
-		r.old = make([]*segment, ring.s)
-		i := 0
-		for _, v := range ring.buffer {
-			if v == nil {
+		r.minGoodSn = ring.minGoodSn
+		r.r = (r.minGoodSn + 1) % r.s
+		r.old = ring.buffer
+		j := 0
+
+		for i := uint32(0); i < ring.s; i++ {
+			if ring.buffer[i] == nil {
 				continue
 			}
-			err := r.insert(v)
-			if err != nil {
-				r.old[i] = v
-				i++
+			inserted := r.insert(ring.buffer[i])
+			if !inserted {
+				r.old[j] = ring.buffer[i]
+				j++
 			}
 		}
-		r.old = r.old[:i]
+		r.old = r.old[:j]
 		return r
 	}
 }
 
-func (ring *ringBufferRcv) insert(seg *segment) error {
+func (ring *ringBufferRcv) insert(seg *segment) bool {
 	sn := seg.getSequenceNumber()
-	if sn > ((ring.minSn + 1) + ring.s) { //is full
-		return fmt.Errorf("ring buffer is full, cannot add %v/%v", ring.minSn, sn)
+	if sn > (ring.minGoodSn + ring.s) { //is full cannot add data beyond the size of the buffer
+		return false
+	}
+	if sn < diffMin(ring.minGoodSn, ring.s) { //late packet, we can ignore it
+		return false
 	}
 	index := sn % ring.s
+	//we may receive a duplicate, don't add
 	if ring.buffer[index] != nil {
-		return fmt.Errorf("overwriting ringbuffer, check your logic %v/%v", sn, index)
+		return false
 	}
 	ring.buffer[index] = seg
-	return nil
+	return true
 }
 
 func (ring *ringBufferRcv) removeSequence() []*segment {
@@ -68,14 +71,13 @@ func (ring *ringBufferRcv) removeSequence() []*segment {
 	}
 
 	var ret []*segment
-	var i uint32
-	for ; i < ring.s; i++ {
+	for i := ring.r; i < ring.s; i++ {
 		seg := ring.buffer[ring.r]
 		if seg != nil {
 			ring.buffer[ring.r] = nil
 			ret = append(ret, seg)
 			ring.r = (ring.r + 1) % ring.s
-			ring.minSn = seg.getSequenceNumber()
+			ring.minGoodSn = seg.getSequenceNumber()
 			ring.drainOverflow()
 		} else {
 			break
@@ -86,11 +88,18 @@ func (ring *ringBufferRcv) removeSequence() []*segment {
 
 func (ring *ringBufferRcv) drainOverflow() {
 	if len(ring.old) > 0 {
-		err := ring.insert(ring.old[0])
-		if err == nil {
+		inserted := ring.insert(ring.old[0])
+		if inserted {
 			ring.old = ring.old[1:]
 		}
 	} else {
 		ring.old = nil
 	}
+}
+
+func diffMin(x uint32, y uint32) uint32 {
+	if x < y {
+		return 0
+	}
+	return x - y
 }
