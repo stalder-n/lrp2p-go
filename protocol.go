@@ -2,7 +2,6 @@ package atp
 
 import (
 	"bytes"
-	"crypto/rand"
 	"log"
 	"net"
 	"strconv"
@@ -34,20 +33,7 @@ type position struct {
 	End   int
 }
 
-var timeoutCheckInterval = 100 * time.Millisecond
-
 var timeZero = time.Time{}
-
-var generateRandomSequenceNumber = func() uint32 {
-	b := make([]byte, 4)
-	_, err := rand.Read(b[2:])
-	handleError(err)
-	sequenceNum := bytesToUint32(b)
-	if sequenceNum == 0 {
-		sequenceNum++
-	}
-	return sequenceNum
-}
 
 // TODO change to reportError(error, chan error) and replace calls with connector.reportError where possible
 func reportError(err error) {
