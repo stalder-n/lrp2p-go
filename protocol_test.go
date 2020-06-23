@@ -101,8 +101,8 @@ func (suite *ArqConnectionTestSuite) SetupTest() {
 	suite.handleTestError(err)
 	alphaConnector.ConnectTo("localhost", 3031)
 	betaConnector.ConnectTo("localhost", 3030)
-	suite.alphaConnection = newSelectiveArq(1, alphaConnector, testErrorChannel)
-	suite.betaConnection = newSelectiveArq(1, betaConnector, testErrorChannel)
+	suite.alphaConnection = newSelectiveArq(alphaConnector, testErrorChannel)
+	suite.betaConnection = newSelectiveArq(betaConnector, testErrorChannel)
 }
 
 func (suite *ArqConnectionTestSuite) TearDownTest() {

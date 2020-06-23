@@ -77,24 +77,23 @@ const (
 
 var arqTimeout = defaultArqTimeout
 
-func newSelectiveArq(initialSequenceNumber uint32, extension connector, errors chan error) *selectiveArq {
+func newSelectiveArq(extension connector, errors chan error) *selectiveArq {
 	extension.SetReadTimeout(arqTimeout)
 	return &selectiveArq{
-		extension:             extension,
-		errorChannel:          errors,
-		segmentBuffer:         make([]*segment, 0),
-		currentSequenceNumber: initialSequenceNumber,
-		writeQueue:            make([]*segment, 0),
-		waitingForAck:         make([]*segment, 0),
-		receiverWindow:        initialReceiverWindowSize,
-		sendSynFlag:           true,
-		cwnd:                  1,
-		aggressiveness:        defaultAggressiveness,
-		ssthresh:              float64(initialReceiverWindowSize / 10),
-		lastCongestionEvent:   time.Now(),
-		rttToMeasure:          5,
-		granularity:           float64(100 * time.Millisecond),
-		rto:                   1 * time.Second,
+		extension:           extension,
+		errorChannel:        errors,
+		segmentBuffer:       make([]*segment, 0),
+		writeQueue:          make([]*segment, 0),
+		waitingForAck:       make([]*segment, 0),
+		receiverWindow:      initialReceiverWindowSize,
+		sendSynFlag:         true,
+		cwnd:                1,
+		aggressiveness:      defaultAggressiveness,
+		ssthresh:            float64(initialReceiverWindowSize / 10),
+		lastCongestionEvent: time.Now(),
+		rttToMeasure:        5,
+		granularity:         float64(100 * time.Millisecond),
+		rto:                 1 * time.Second,
 	}
 }
 
@@ -149,7 +148,11 @@ func (arq *selectiveArq) handleAck(ack *segment, timestamp time.Time) {
 func (arq *selectiveArq) writeAck(seg *segment, timestamp time.Time) {
 	arq.writeMutex.Lock()
 	defer arq.writeMutex.Unlock()
-	ack := createAckSegment(arq.nextExpectedSequenceNumber-1, seg.getSequenceNumber(), arq.receiverWindow)
+	lastInOrder := arq.nextExpectedSequenceNumber - 1
+	if arq.nextExpectedSequenceNumber == 0 {
+		lastInOrder = 0
+	}
+	ack := createAckSegment(lastInOrder, seg.getSequenceNumber(), arq.receiverWindow)
 	ack.timestamp = timestamp
 	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
 }
@@ -208,11 +211,6 @@ func (arq *selectiveArq) handleSuccess(receivedSeg *segment, timestamp time.Time
 	if receivedSeg.isFlaggedAs(flagACK) {
 		arq.handleAck(receivedSeg, timestamp)
 		return ackReceived
-	}
-	if arq.nextExpectedSequenceNumber == 0 && !receivedSeg.isFlaggedAs(flagSYN) {
-		return fail
-	} else if arq.nextExpectedSequenceNumber == 0 {
-		arq.nextExpectedSequenceNumber = receivedSeg.getSequenceNumber()
 	}
 	if receivedSeg.getSequenceNumber() >= arq.nextExpectedSequenceNumber {
 		arq.segmentBuffer = insertSegmentInOrder(arq.segmentBuffer, receivedSeg)

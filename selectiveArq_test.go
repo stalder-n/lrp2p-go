@@ -23,7 +23,7 @@ type ArqTestSuite struct {
 
 func newMockSelectiveRepeatArqConnection(connector *channelConnector, name string) (*selectiveArq, *segmentManipulator) {
 	manipulator := &segmentManipulator{extension: connector, toDropOnce: make([]uint32, 0)}
-	arq := newSelectiveArq(1, manipulator, testErrorChannel)
+	arq := newSelectiveArq(manipulator, testErrorChannel)
 	return arq, manipulator
 }
 
@@ -81,7 +81,7 @@ func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
 }
 
 func (suite *ArqTestSuite) TestRetransmitLostSegmentOnAck() {
-	suite.alphaManipulator.DropOnce(2)
+	suite.alphaManipulator.DropOnce(1)
 	suite.write(suite.alphaArq, repeatDataSize('A', 5), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
@@ -106,7 +106,7 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentOnAck() {
 }
 
 func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
-	suite.alphaManipulator.DropOnce(2)
+	suite.alphaManipulator.DropOnce(1)
 	suite.write(suite.alphaArq, repeatDataSize('A', 2), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)

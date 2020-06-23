@@ -67,7 +67,7 @@ type connector interface {
 
 func connect(connector connector, errors chan error) *selectiveArq {
 	sec := newSecurityExtension(connector, nil, nil, errors)
-	arq := newSelectiveArq(generateRandomSequenceNumber(), sec, errors)
+	arq := newSelectiveArq(sec, errors)
 	return arq
 }
 
