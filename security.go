@@ -21,6 +21,7 @@ type securityExtension struct {
 	writeNonce   uint64
 	usedNonces   map[uint64]uint8
 	errorChannel chan error
+	readTimeout  time.Duration
 }
 
 func (sec *securityExtension) ConnectTo(remoteHost string, remotePort int) {
@@ -49,7 +50,9 @@ func (sec *securityExtension) Close() error {
 
 func (sec *securityExtension) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	if sec.handshake == nil {
+		sec.connector.SetReadTimeout(0)
 		payloadWritten := sec.initiateHandshake(buffer, timestamp)
+		sec.SetReadTimeout(sec.readTimeout)
 		if payloadWritten {
 			return success, len(buffer), nil
 		}
@@ -67,7 +70,9 @@ func (sec *securityExtension) Write(buffer []byte, timestamp time.Time) (statusC
 
 func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
 	if sec.handshake == nil {
+		sec.connector.SetReadTimeout(0)
 		payload := sec.acceptHandshake(timestamp)
+		sec.SetReadTimeout(sec.readTimeout)
 		if payload != nil {
 			copy(buffer, payload)
 			return success, len(payload), nil
@@ -92,6 +97,7 @@ func (sec *securityExtension) Read(buffer []byte, timestamp time.Time) (statusCo
 }
 
 func (sec *securityExtension) SetReadTimeout(t time.Duration) {
+	sec.readTimeout = t
 	sec.connector.SetReadTimeout(t)
 }
 
@@ -188,10 +194,7 @@ func (h *handshakeXXStrategy) initiate(payload []byte, timestamp time.Time) bool
 }
 
 func (h *handshakeXXStrategy) accept(timestamp time.Time) []byte {
-	state := timeout
-	for ; state == timeout; {
-		state, _, _, _ = h.sec.readHandshakeMessage(timestamp)
-	}
+	_, _, _, _ = h.sec.readHandshakeMessage(timestamp)
 	h.sec.writeHandshakeMessage(nil, timestamp)
 	_, _, h.sec.decrypter, h.sec.encrypter = h.sec.readHandshakeMessage(timestamp)
 	return nil
@@ -206,9 +209,6 @@ type handshakeKKStrategy struct {
 }
 
 func (h *handshakeKKStrategy) initiate(payload []byte, timestamp time.Time) bool {
-	h.sec.SetReadTimeout(1 * time.Second)
-	defer h.sec.SetReadTimeout(0)
-
 	code := fail
 	for try := 0; code != success && try < 3; try++ {
 		if try == 2 {
@@ -224,9 +224,6 @@ func (h *handshakeKKStrategy) initiate(payload []byte, timestamp time.Time) bool
 }
 
 func (h *handshakeKKStrategy) accept(timestamp time.Time) []byte {
-	h.sec.SetReadTimeout(1 * time.Second)
-	defer h.sec.SetReadTimeout(0)
-
 	var payload []byte
 	code := fail
 	for try := 0; code != success && try < 3; try++ {

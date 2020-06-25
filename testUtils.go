@@ -18,10 +18,6 @@ func init() {
 	testErrorChannel = make(chan error, 100)
 }
 
-func (suite *atpTestSuite) timeout() time.Time {
-	return suite.timestamp.Add(arqTimeout)
-}
-
 func (suite *atpTestSuite) handleTestError(err error) {
 	if err != nil && len(testErrorChannel) > 0 {
 		suite.Errorf(err, "Error occurred")
@@ -76,10 +72,6 @@ func (manipulator *segmentManipulator) Close() error {
 	return manipulator.extension.Close()
 }
 
-func (manipulator *segmentManipulator) AddExtension(connector connector) {
-	manipulator.extension = connector
-}
-
 func (manipulator *segmentManipulator) DropOnce(sequenceNumber uint32) {
 	manipulator.toDropOnce = append(manipulator.toDropOnce, sequenceNumber)
 }
@@ -101,6 +93,38 @@ func (manipulator *segmentManipulator) SetReadTimeout(t time.Duration) {
 }
 
 func (manipulator *segmentManipulator) reportError(err error) {
+	if err != nil {
+		testErrorChannel <- err
+	}
+}
+
+type connectionManipulator struct {
+	extension  connector
+	writeDelay time.Duration
+}
+
+func (manipulator *connectionManipulator) ConnectTo(remoteHost string, remotePort int) {
+	manipulator.extension.ConnectTo(remoteHost, remotePort)
+}
+
+func (manipulator *connectionManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	return manipulator.extension.Read(buffer, timestamp)
+}
+
+func (manipulator *connectionManipulator) Close() error {
+	return manipulator.extension.Close()
+}
+
+func (manipulator *connectionManipulator) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	time.Sleep(manipulator.writeDelay)
+	return manipulator.extension.Write(buffer, timestamp)
+}
+
+func (manipulator *connectionManipulator) SetReadTimeout(t time.Duration) {
+	manipulator.extension.SetReadTimeout(t)
+}
+
+func (manipulator *connectionManipulator) reportError(err error) {
 	if err != nil {
 		testErrorChannel <- err
 	}
@@ -151,7 +175,6 @@ func (connector *channelConnector) Read(buffer []byte, timestamp time.Time) (sta
 
 func (connector *channelConnector) SetReadTimeout(t time.Duration) {
 	connector.timeout = t
-	connector.in <- nil
 }
 
 func (connector *channelConnector) after(operationTime time.Time, timeout time.Duration) <-chan time.Time {
