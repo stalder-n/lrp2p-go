@@ -86,6 +86,18 @@ func (ring *ringBufferRcv) removeSequence() []*segment {
 	return ret
 }
 
+func (ring *ringBufferRcv) remove() *segment {
+	if ring.buffer[ring.r] == nil {
+		return nil
+	}
+	seg := ring.buffer[ring.r]
+	ring.buffer[ring.r] = nil
+	ring.r = (ring.r + 1) % ring.s
+	ring.minGoodSn = seg.getSequenceNumber()
+	ring.drainOverflow()
+	return seg
+}
+
 func (ring *ringBufferRcv) drainOverflow() {
 	if len(ring.old) > 0 {
 		inserted := ring.insert(ring.old[0])
