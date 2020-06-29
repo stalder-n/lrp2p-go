@@ -156,7 +156,7 @@ func TestNumOfSegments(t *testing.T) {
 }
 
 func TestFuzz(t *testing.T) {
-	r := NewRingBufferSnd(10, 3)
+	r := NewRingBufferSnd(10)
 
 	seqIns := 0
 	seqRem := 0
