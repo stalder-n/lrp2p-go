@@ -6,22 +6,21 @@ import (
 )
 
 type ringBufferSnd struct {
-	buffer     []*segment
-	s          uint32
-	r          uint32
-	w          uint32
-	timeoutSec int
-	prevSn     uint32
-	old        *ringBufferSnd
-	newSize    uint32
+	buffer  []*segment
+	s       uint32
+	r       uint32
+	w       uint32
+	prevSn  uint32
+	old     *ringBufferSnd
+	newSize uint32
+	n       uint32
 }
 
-func NewRingBufferSnd(size uint32, timeoutSec int) *ringBufferSnd {
+func NewRingBufferSnd(size uint32) *ringBufferSnd {
 	return &ringBufferSnd{
-		buffer:     make([]*segment, size+1),
-		s:          size + 1,
-		timeoutSec: timeoutSec,
-		prevSn:     uint32(0xffffffff), // -1
+		buffer: make([]*segment, size+1),
+		s:      size + 1,
+		prevSn: uint32(0xffffffff), // -1
 	}
 }
 
@@ -29,11 +28,33 @@ func (ring *ringBufferSnd) size() uint32 {
 	return ring.s - 1
 }
 
+func (ring *ringBufferSnd) isEmpty() bool {
+	return ring.numOfSegments() == 0
+}
+
+func (ring *ringBufferSnd) numOfSegments() uint32 {
+	num := uint32(0)
+	if ring.old != nil {
+		num += ring.old.numOfSegments()
+	}
+	return num + ring.n
+}
+
+func (ring *ringBufferSnd) first() *segment {
+	if ring.isEmpty() {
+		return nil
+	}
+	if ring.old != nil {
+		return ring.old.first()
+	}
+	return ring.buffer[ring.r]
+}
+
 func (ring *ringBufferSnd) resize(targetSize uint32) (bool, *ringBufferSnd) {
 	if targetSize == ring.size() || ring.old != nil {
 		return false, ring
 	} else {
-		r := NewRingBufferSnd(targetSize, ring.timeoutSec)
+		r := NewRingBufferSnd(targetSize)
 		r.old = ring
 		r.prevSn = ring.prevSn
 		r.w = (r.prevSn + 1) % r.s
@@ -47,7 +68,7 @@ func (ring *ringBufferSnd) insertSequence(seg *segment) (bool, error) {
 		return false, nil
 	}
 	if ring.prevSn != seg.getSequenceNumber()-1 {
-		return false, fmt.Errorf("not a sequence, cannot add %v/%v", ring.prevSn, (seg.getSequenceNumber() - 1))
+		return false, fmt.Errorf("not a sequence, cannot add %v/%v", ring.prevSn, seg.getSequenceNumber()-1)
 	}
 	if ring.buffer[ring.w] != nil {
 		return false, fmt.Errorf("not empty at pos %v", ring.w)
@@ -55,20 +76,21 @@ func (ring *ringBufferSnd) insertSequence(seg *segment) (bool, error) {
 	ring.prevSn = seg.getSequenceNumber()
 	ring.buffer[ring.w] = seg
 	ring.w = (ring.w + 1) % ring.s
+	ring.n++
 	return true, nil
 }
 
-func (ring *ringBufferSnd) getTimedout(now time.Time) []*segment {
+func (ring *ringBufferSnd) getTimedout(now time.Time, timeout time.Duration) []*segment {
 	var ret []*segment
 	if ring.old != nil {
-		ret = ring.old.getTimedout(now)
+		ret = ring.old.getTimedout(now, timeout)
 	}
 
 	for i := uint32(0); i < ring.s; i++ {
 		index := (ring.r + i) % ring.s
 		seg := ring.buffer[index]
 		if seg != nil {
-			if seg.timestamp.Add(time.Second * time.Duration(ring.timeoutSec)).Before(now) {
+			if seg.timestamp.Add(timeout).Before(now) {
 				ret = append(ret, seg)
 			}
 		}
@@ -101,6 +123,7 @@ func (ring *ringBufferSnd) remove(sequenceNumber uint32) (*segment, bool, error)
 		return nil, false, fmt.Errorf("sn mismatch %v/%v", sequenceNumber, seg.getSequenceNumber())
 	}
 	ring.buffer[index] = nil
+	ring.n--
 
 	empty := true
 	for i := ring.r; i != ring.w; i = (i + 1) % ring.s {
@@ -112,8 +135,4 @@ func (ring *ringBufferSnd) remove(sequenceNumber uint32) (*segment, bool, error)
 		}
 	}
 	return seg, empty, nil
-}
-
-func (ring *ringBufferSnd) timoutSec() int {
-	return ring.timeoutSec
 }
