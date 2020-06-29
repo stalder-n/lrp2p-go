@@ -66,7 +66,7 @@ func (suite *ArqTestSuite) TestWriteTwoSegments() {
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.True(suite.alphaArq.waitingForAck.isEmpty())
 }
 
 func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
@@ -76,7 +76,7 @@ func (suite *ArqTestSuite) TestWriteAckAfterTimeout() {
 	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp.Add(defaultArqTimeout))
 	suite.readAck(suite.alphaArq, suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.True(suite.alphaArq.waitingForAck.isEmpty())
 }
 
 func (suite *ArqTestSuite) TestRetransmitLostSegmentOnAck() {
@@ -99,9 +99,6 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentOnAck() {
 	suite.read(suite.betaArq, repeatDataSize('C', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('D', 1), suite.timestamp)
 	suite.read(suite.betaArq, repeatDataSize('E', 1), suite.timestamp)
-
-	suite.Empty(suite.alphaArq.waitingForAck)
-	suite.Empty(suite.betaArq.segmentBuffer)
 }
 
 func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
@@ -110,13 +107,13 @@ func (suite *ArqTestSuite) TestRetransmitLostSegmentsOnTimeout() {
 	suite.read(suite.betaArq, repeatDataSize('A', 1), suite.timestamp)
 	suite.readExpectStatus(suite.betaArq, timeout, suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
-	suite.Len(suite.alphaArq.waitingForAck, 1)
+	suite.Equal(uint32(1), suite.alphaArq.waitingForAck.numOfSegments())
 
 	suite.write(suite.alphaArq, "", suite.timestamp.Add(suite.alphaArq.rto+1))
 	suite.read(suite.betaArq, repeatDataSize('B', 1), suite.timestamp)
 	suite.readAck(suite.alphaArq, suite.timestamp)
 
-	suite.Empty(suite.alphaArq.waitingForAck)
+	suite.True(suite.alphaArq.waitingForAck.isEmpty())
 }
 
 func (suite *ArqTestSuite) TestMeasureRTOWithSteadyRTT() {
