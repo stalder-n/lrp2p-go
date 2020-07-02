@@ -216,6 +216,7 @@ func (socket *Socket) Write(buffer []byte) (int, error) {
 	if !socket.isReadWriting {
 		go socket.write()
 		go socket.read()
+		go socket.checkForSegmentTimeout()
 		socket.isReadWriting = true
 	}
 	return len(buffer), err
@@ -237,6 +238,7 @@ func (socket *Socket) Read(buffer []byte) (int, error) {
 	if !socket.isReadWriting {
 		go socket.read()
 		go socket.write()
+		go socket.checkForSegmentTimeout()
 		socket.isReadWriting = true
 	}
 	socket.mutex.Lock()
@@ -290,10 +292,18 @@ func (socket *Socket) SetReadTimeout(timeout time.Duration) {
 
 func (socket *Socket) checkForSegmentTimeout() {
 	for {
-		select {
-		case <-time.After(socket.connection.rto):
-			_, _, err := socket.connection.Write(nil, time.Now())
-			reportError(err)
+		if socket.connection.sRtt == 0 {
+			select {
+			case <-time.After(socket.connection.rto):
+				_, _, err := socket.connection.Write(nil, time.Now())
+				reportError(err)
+			}
+		} else {
+			select {
+			case <-time.After(time.Duration(socket.connection.sRtt)):
+				_, _, err := socket.connection.Write(nil, time.Now())
+				reportError(err)
+			}
 		}
 	}
 }
