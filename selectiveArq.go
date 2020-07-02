@@ -135,6 +135,7 @@ func (arq *selectiveArq) handleAck(ack *segment, timestamp time.Time) {
 	if arq.waitingForAck.numOfSegments() > 0 && (ackedSequence-lastInOrder) >= arq.waitingForAck.first().retransmitThresh {
 		var retransmit *segment
 		retransmit = arq.waitingForAck.first()
+		retransmit.addFlag(flagRTO)
 		retransmit.retransmitThresh += defaultRetransmitThresh
 		_, _ = arq.writeSegment(retransmit, timestamp)
 		congType = segmentLoss
@@ -262,6 +263,7 @@ func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
 		arq.computeCongestionWindow(segmentTimeout)
 	}
 	for _, seg := range removed {
+		seg.addFlag(flagRTO)
 		_, _ = arq.writeSegment(seg, timestamp)
 	}
 }

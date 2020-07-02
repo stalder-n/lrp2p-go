@@ -8,13 +8,6 @@ import (
 var segmentMtu = defaultMTU
 
 const (
-	ackDelimStart byte = 1
-	ackDelimSeq   byte = 2
-	ackDelimRange byte = 4
-	ackDelimEnd   byte = 8
-)
-
-const (
 	flagACK byte = 1
 	flagSYN byte = 2
 

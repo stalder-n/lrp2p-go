@@ -100,7 +100,6 @@ func (suite *ArqConnectionTestSuite) SetupTest() {
 	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
 	suite.handleTestError(err)
 	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
 	suite.alphaConnection = newSelectiveArq(alphaConnector, testErrorChannel)
 	suite.betaConnection = newSelectiveArq(betaConnector, testErrorChannel)
 	suite.alphaConnection.SetReadTimeout(0)

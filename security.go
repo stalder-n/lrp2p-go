@@ -186,7 +186,7 @@ type handshakeXXStrategy struct {
 	sec *securityExtension
 }
 
-func (h *handshakeXXStrategy) initiate(payload []byte, timestamp time.Time) bool {
+func (h *handshakeXXStrategy) initiate(_ []byte, timestamp time.Time) bool {
 	h.sec.writeHandshakeMessage(nil, timestamp)
 	h.sec.readHandshakeMessage(timestamp)
 	h.sec.encrypter, h.sec.decrypter = h.sec.writeHandshakeMessage(nil, timestamp)
