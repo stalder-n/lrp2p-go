@@ -13,7 +13,8 @@ type ringBufferSnd struct {
 	prevSn  uint32
 	old     *ringBufferSnd
 	newSize uint32
-	n       uint32
+	//TODO TB: remove the +1 to determine if its full or empty
+	n uint32
 }
 
 func NewRingBufferSnd(size uint32) *ringBufferSnd {

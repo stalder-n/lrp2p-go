@@ -31,7 +31,7 @@ import (
 // TODO add connection id
 // TODO add version number
 type selectiveArq struct {
-	extension    connector
+	extension    *securityExtension
 	writeMutex   sync.Mutex
 	errorChannel chan error
 
@@ -76,7 +76,7 @@ const (
 	segmentTimeout
 )
 
-func newSelectiveArq(extension connector, errors chan error) *selectiveArq {
+func newSelectiveArq(extension *securityExtension, errors chan error) *selectiveArq {
 	extension.SetReadTimeout(defaultArqTimeout)
 	return &selectiveArq{
 		extension:           extension,

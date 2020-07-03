@@ -1,5 +1,24 @@
 package atp
 
+/*
+ 1. Listen on port xy -> PeerSocket (possibility to close, connect)
+ 2. PeerSocket.Close -> close locally, send best-effort close message: other side removes mapping for multiplexing,
+    notifies user, (multiplexing, GC, keep-alive)
+ 3. PeerSocket.Connect -> register Connect struct with mapping for multiplexing, store remote port/ip/connid. Handshake
+    exchange key material
+    (amp attack: I'm 2.2.2.2, attacker is 6.6.6.6, victim is 7.7.7.7
+    -> attacker sends UDP packet to 2.2.2.2 with source IP 7.7.7.7 handshake is "hello/ueoeauaoue"
+    -> 2.2.2.2 replies "hello there", twice as large to 7.7.7.7
+ 4. Connect.Write([]byte) error, Connect.Read([]byte) (int, error) -> go interface
+     * ARQ.Write -> header, seg
+     * Connect.Write -> connectionId, header, seg
+     * Security.Write -> nonce + enc(connectionId, header, seg)
+ 5. Connect.Read([]byte) (int, error)
+     * Security.Read
+     * Connect.Read -> header seg
+     * ARQ.Read -> []byte
+*/
+
 import (
 	"bytes"
 	"log"
@@ -29,18 +48,37 @@ const (
 	connectionClosed
 )
 
+const (
+	timeoutErrorString          = "i/o timeout"
+	connectionClosedErrorString = "use of closed network connection"
+)
+
+var timeZero = time.Time{}
+
+const retryTimeout = 10 * time.Millisecond
+
 type position struct {
 	Start int
 	End   int
 }
 
-var timeZero = time.Time{}
+type udpConnector struct {
+	server       *net.UDPConn
+	remoteAddr   *net.UDPAddr
+	timeout      time.Duration
+	errorChannel chan error
+}
 
-// TODO change to reportError(error, chan error) and replace calls with connector.reportError where possible
-func reportError(err error) {
-	if err != nil {
-		log.Println(err)
-	}
+// Socket is an ATP Socket that can open a two-way connection to
+// another Socket. Use atp.SocketConnect to create an instance.
+type Socket struct {
+	readBuffer    bytes.Buffer
+	readNotifier  chan bool
+	mutex         sync.Mutex
+	timeout       time.Duration
+	isReadWriting bool
+	errorChannel  chan error
+	multiplex     map[uint64]*selectiveArq
 }
 
 type connector interface {
@@ -50,6 +88,16 @@ type connector interface {
 	SetReadTimeout(time.Duration)
 	ConnectTo(remoteHost string, remotePort int)
 	reportError(error)
+}
+
+type conn struct {
+}
+
+// TODO change to reportError(error, chan error) and replace calls with connector.reportError where possible
+func reportError(err error) {
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func connect(connector connector, errors chan error) *selectiveArq {
@@ -63,16 +111,6 @@ func handleError(err error) {
 		log.Fatal(err)
 	}
 }
-
-type udpConnector struct {
-	server       *net.UDPConn
-	remoteAddr   *net.UDPAddr
-	timeout      time.Duration
-	errorChannel chan error
-}
-
-const timeoutErrorString = "i/o timeout"
-const connectionClosedErrorString = "use of closed network connection"
 
 func udpListen(host string, localPort int, errorChannel chan error) (*udpConnector, error) {
 	localAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(host, strconv.Itoa(localPort)))
@@ -151,20 +189,6 @@ func (connector *udpConnector) reportError(err error) {
 		connector.errorChannel <- err
 	}
 }
-
-// Socket is an ATP Socket that can open a two-way connection to
-// another Socket. Use atp.SocketConnect to create an instance.
-type Socket struct {
-	connection    *selectiveArq
-	readBuffer    bytes.Buffer
-	readNotifier  chan bool
-	mutex         sync.Mutex
-	timeout       time.Duration
-	isReadWriting bool
-	errorChannel  chan error
-}
-
-const retryTimeout = 10 * time.Millisecond
 
 // SocketListen creates a socket listening on the specified local port for a connection
 func SocketListen(host string, localPort int) *Socket {
