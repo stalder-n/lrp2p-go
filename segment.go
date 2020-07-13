@@ -91,6 +91,12 @@ func (seg *segment) getDataAsString() string {
 	return string(seg.data)
 }
 
+func (seg *segment) updateTimestamp(status statusCode, timestamp time.Time) {
+	if status == success {
+		seg.timestamp = timestamp
+	}
+}
+
 func setDataOffset(buffer []byte, dataOffset byte) {
 	buffer[dataOffsetPosition.Start] = dataOffset
 }

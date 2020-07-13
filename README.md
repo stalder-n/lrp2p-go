@@ -19,14 +19,13 @@ While ATP is a general purpose protocol, it is especially useful for developers 
 package main
 
 import (
-    "fmt"
-    "github.com/nicosta1132/atp-go"
+    "github.com/nicosta1132/atp"
 )
 
 func main() {
-    socket := atp.SocketListen("127.0.0.1", 3030)
-    socket.ConnectTo("localhost", 3031)
-    _, err := socket.Write([]byte("Hello World"))
+    socket := atp.SocketListen("", 3030)
+    conn := socket.ConnectTo("<Peer 2 ip address>", 3030)
+    _, err := conn.Write([]byte("Hello World"))
     if err != nil {
         panic(err)
     }
@@ -38,21 +37,88 @@ package main
 
 import (
     "fmt"
-    "github.com/nicosta1132/atp-go"
+    "github.com/nicosta1132/atp"
 )
 
 func main() {
-    socket := atp.SocketListen("127.0.0.1", 3031)
-    socket.ConnectTo("localhost", 3030)
+    socket := atp.SocketListen("", 3030)
+    conn := socket.Accept()
     readBuffer := make([]byte, 32)
-    n, err := socket.Read(readBuffer)
+    n, err := conn.Read(readBuffer)
+    if err != nil {
+        panic(err)
+    }
     fmt.Println(string(readBuffer[:n]))
+}
+```
+
+## Multiplexing example
+
+### Peer 1
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/nicosta1132/atp"
+)
+
+func main() {
+    socket := atp.SocketListen("", 3030)
+    conn1 := socket.Accept()
+    conn2 := socket.Accept()
+    
+    // read from first connection
+    readBuffer := make([]byte, 64)
+    n,err := conn1.Read(readBuffer)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(readBuffer[:n]))
+    
+    // read from first connection
+    n,err = conn2.Read(readBuffer)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(readBuffer[:n]))
+}
+```
+### Peer 2
+```go
+package main
+
+import (
+    "github.com/nicosta1132/atp"
+)
+
+func main() {
+    socket := atp.SocketListen("", 3030)
+    conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
+    _, err := conn.Write([]byte("Hello from Peer 2"))
     if err != nil {
         panic(err)
     }
 }
 ```
 
+### Peer 3
+```go
+package main
+
+import (
+    "github.com/nicosta1132/atp"
+)
+
+func main() {
+    socket := atp.SocketListen("", 3030)
+    conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
+    _, err := conn.Write([]byte("Hello from Peer 3"))
+    if err != nil {
+        panic(err)
+    }
+}
+```
 ## Specification
 
 ### Data Segment Header

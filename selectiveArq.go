@@ -25,14 +25,10 @@ import (
 //   │Socket1│          │Socket2│
 //   └───────┘          └───────┘
 // The sequence above shows the default case for this ARQ component
-// TODO slow start, congestion control
-// TODO replace slices with ring buffer implementation
-//		- track number of valid segments
-// TODO add connection id
 // TODO add version number
 type selectiveArq struct {
-	extension    *securityExtension
 	writeMutex   sync.Mutex
+	write        func([]byte) (statusCode, int, error)
 	errorChannel chan error
 
 	// receiver
@@ -63,7 +59,6 @@ type selectiveArq struct {
 }
 
 const initialReceiverWindowSize = uint32(1<<16 - 1)
-const defaultArqTimeout = 1 * time.Millisecond
 const rttAlpha, rttBeta = 0.125, 0.25
 const betaCubic float64 = 0.7
 const defaultAggressiveness = 1
@@ -76,10 +71,9 @@ const (
 	segmentTimeout
 )
 
-func newSelectiveArq(extension *securityExtension, errors chan error) *selectiveArq {
-	extension.SetReadTimeout(defaultArqTimeout)
+func newSelectiveArq(writeAction func([]byte) (statusCode, int, error), errors chan error) *selectiveArq {
 	return &selectiveArq{
-		extension:           extension,
+		write:               writeAction,
 		errorChannel:        errors,
 		segmentBuffer:       NewRingBufferRcv(initialReceiverWindowSize),
 		writeQueue:          &segmentQueue{l: list.New()},
@@ -137,7 +131,8 @@ func (arq *selectiveArq) handleAck(ack *segment, timestamp time.Time) {
 		retransmit = arq.waitingForAck.first()
 		retransmit.addFlag(flagRTO)
 		retransmit.retransmitThresh += defaultRetransmitThresh
-		_, _ = arq.writeSegment(retransmit, timestamp)
+		status, _, _ := arq.write(retransmit.buffer)
+		retransmit.updateTimestamp(status, timestamp)
 		congType = segmentLoss
 	}
 	arq.computeCongestionWindow(congType)
@@ -152,7 +147,8 @@ func (arq *selectiveArq) writeAck(seg *segment, timestamp time.Time) {
 	}
 	ack := createAckSegment(lastInOrder, seg.getSequenceNumber(), arq.receiverWindow)
 	ack.timestamp = timestamp
-	_, _, _ = arq.extension.Write(ack.buffer, timestamp)
+	status, _, _ := arq.write(ack.buffer)
+	ack.updateTimestamp(status, timestamp)
 }
 
 func (arq *selectiveArq) computeCongestionWindow(t congestionType) {
@@ -201,35 +197,25 @@ func (arq *selectiveArq) estimateTCPWindow(t float64) float64 {
 	return arq.wMax*betaCubic + 3*(1-betaCubic)/(1+betaCubic) + (seconds / rttSeconds)
 }
 
-func (arq *selectiveArq) handleSuccess(receivedSeg *segment, timestamp time.Time) statusCode {
-	if receivedSeg.isFlaggedAs(flagACK) {
-		arq.handleAck(receivedSeg, timestamp)
-		return ackReceived
-	}
-	if receivedSeg.getSequenceNumber() >= arq.nextExpectedSequenceNumber {
-		arq.segmentBuffer.insert(receivedSeg)
-	}
-	arq.writeAck(receivedSeg, timestamp)
-	return success
-}
-
-func (arq *selectiveArq) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	buf := make([]byte, len(buffer))
-	status, n, err := arq.extension.Read(buf, timestamp)
-
-	if status == success {
-		status = arq.handleSuccess(createSegment(buf[:n]), timestamp)
+func (arq *selectiveArq) processReceivedSegment(buffer []byte, removeMultiple bool, timestamp time.Time) (statusCode, []*segment) {
+	if len(buffer) > 0 {
+		seg := createSegment(buffer)
+		if seg.isFlaggedAs(flagACK) {
+			arq.handleAck(seg, timestamp)
+			return ackReceived, nil
+		}
+		if seg.getSequenceNumber() >= arq.nextExpectedSequenceNumber {
+			arq.segmentBuffer.insert(seg)
+		}
+		arq.writeAck(seg, timestamp)
 	}
 
-	seg := arq.segmentBuffer.remove()
-	if seg != nil {
-		arq.nextExpectedSequenceNumber++
-		copy(buffer, seg.data)
-		return success, len(seg.data), err
-	} else if status == success {
-		return invalidSegment, 0, err
+	segs := arq.segmentBuffer.removeSequence(removeMultiple)
+	if len(segs) > 0 {
+		arq.nextExpectedSequenceNumber = segs[len(segs)-1].getSequenceNumber() + 1
+		return success, segs
 	}
-	return status, 0, err
+	return invalidSegment, nil
 }
 
 func (arq *selectiveArq) getNextSegmentInBuffer(currentIndex int, sequenceNum uint32, buffer []byte) (int, *segment) {
@@ -246,6 +232,9 @@ func (arq *selectiveArq) getNextSegmentInBuffer(currentIndex int, sequenceNum ui
 }
 
 func (arq *selectiveArq) queueNewSegments(buffer []byte) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
+
 	var seg *segment
 	currentIndex := 0
 	for {
@@ -257,27 +246,34 @@ func (arq *selectiveArq) queueNewSegments(buffer []byte) {
 	}
 }
 
-func (arq *selectiveArq) requeueTimedOutSegments(timestamp time.Time) {
+func (arq *selectiveArq) retransmitTimedOutSegments(timestamp time.Time) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
+
 	removed := arq.waitingForAck.getTimedout(timestamp, arq.rto)
 	if len(removed) > 0 {
 		arq.computeCongestionWindow(segmentTimeout)
 	}
 	for _, seg := range removed {
 		seg.addFlag(flagRTO)
-		_, _ = arq.writeSegment(seg, timestamp)
+		status, _, _ := arq.write(seg.buffer)
+		seg.updateTimestamp(status, timestamp)
 	}
 }
 
-func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, int, error) {
-	sumN := 0
+func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, error) {
+	arq.writeMutex.Lock()
+	defer arq.writeMutex.Unlock()
+
 	for arq.writeQueue.size() > 0 {
 		if arq.waitingForAck.numOfSegments() >= uint32(arq.cwnd) {
-			return windowFull, sumN, nil
+			return windowFull, nil
 		}
 		seg := arq.writeQueue.peek()
-		statusCode, err := arq.writeSegment(seg, timestamp)
-		if statusCode != success {
-			return statusCode, sumN, err
+		status, _, err := arq.write(seg.buffer)
+		seg.updateTimestamp(status, timestamp)
+		if status != success {
+			return status, err
 		}
 		inserted, err := arq.waitingForAck.insertSequence(seg)
 		if inserted {
@@ -287,38 +283,8 @@ func (arq *selectiveArq) writeQueuedSegments(timestamp time.Time) (statusCode, i
 			inserted, err = arq.waitingForAck.insertSequence(seg)
 			arq.writeQueue.pop()
 		}
-		sumN += len(seg.data)
 	}
-	return success, sumN, nil
-}
-
-func (arq *selectiveArq) writeSegment(seg *segment, timestamp time.Time) (statusCode, error) {
-	statusCode, _, err := arq.extension.Write(seg.buffer, timestamp)
-	seg.timestamp = timestamp
-	return statusCode, err
-}
-
-func (arq *selectiveArq) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	arq.writeMutex.Lock()
-	defer arq.writeMutex.Unlock()
-
-	arq.requeueTimedOutSegments(timestamp)
-	if len(buffer) > 0 {
-		arq.queueNewSegments(buffer)
-	}
-	return arq.writeQueuedSegments(timestamp)
-}
-
-func (arq *selectiveArq) Close() error {
-	return arq.extension.Close()
-}
-
-func (arq *selectiveArq) SetReadTimeout(timeout time.Duration) {
-	arq.extension.SetReadTimeout(timeout)
-}
-
-func (arq *selectiveArq) ConnectTo(remoteHost string, remotePort int) {
-	arq.extension.ConnectTo(remoteHost, remotePort)
+	return success, nil
 }
 
 func (arq *selectiveArq) reportError(err error) {

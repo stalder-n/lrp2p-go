@@ -2,6 +2,7 @@ package atp
 
 import (
 	"github.com/stretchr/testify/suite"
+	"strings"
 	"time"
 )
 
@@ -24,110 +25,10 @@ func (suite *atpTestSuite) handleTestError(err error) {
 	}
 }
 
-func (suite *atpTestSuite) write(c connector, payload string, timestamp time.Time) int {
-	return suite.writeExpectStatus(c, payload, success, timestamp)
-}
-
-func (suite *atpTestSuite) writeExpectStatus(c connector, payload string, code statusCode, timestamp time.Time) int {
-	status, n, err := c.Write([]byte(payload), timestamp)
-	suite.handleTestError(err)
-	suite.Equal(code, status)
-	return n
-}
-
-func (suite *atpTestSuite) read(c connector, expected string, timestamp time.Time) {
-	readBuffer := make([]byte, segmentMtu)
-	status, n, err := c.Read(readBuffer, timestamp)
-	suite.handleTestError(err)
-	suite.Equal(success, status)
-	suite.Equal(expected, string(readBuffer[:n]))
-}
-
-func (suite *atpTestSuite) readExpectStatus(c connector, expected statusCode, timestamp time.Time) {
-	readBuffer := make([]byte, segmentMtu)
-	status, _, err := c.Read(readBuffer, timestamp)
-	suite.handleTestError(err)
-	suite.Equal(expected, status)
-}
-
-func (suite *atpTestSuite) readAck(c connector, timestamp time.Time) {
-	suite.readExpectStatus(c, ackReceived, timestamp)
-}
-
 type segmentManipulator struct {
 	savedSegments map[uint32][]byte
 	toDropOnce    []uint32
-	extension     connector
-}
-
-func (manipulator *segmentManipulator) ConnectTo(remoteHost string, remotePort int) {
-	manipulator.extension.ConnectTo(remoteHost, remotePort)
-}
-
-func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	return manipulator.extension.Read(buffer, timestamp)
-}
-
-func (manipulator *segmentManipulator) Close() error {
-	return manipulator.extension.Close()
-}
-
-func (manipulator *segmentManipulator) DropOnce(sequenceNumber uint32) {
-	manipulator.toDropOnce = append(manipulator.toDropOnce, sequenceNumber)
-}
-
-func (manipulator *segmentManipulator) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	seg := createSegment(buffer)
-	for i := 0; i < len(manipulator.toDropOnce); i++ {
-		if manipulator.toDropOnce[i] == seg.getSequenceNumber() {
-			manipulator.toDropOnce = append(manipulator.toDropOnce[:i], manipulator.toDropOnce[i+1:]...)
-			i--
-			return success, len(buffer), nil
-		}
-	}
-	return manipulator.extension.Write(buffer, timestamp)
-}
-
-func (manipulator *segmentManipulator) SetReadTimeout(t time.Duration) {
-	manipulator.extension.SetReadTimeout(t)
-}
-
-func (manipulator *segmentManipulator) reportError(err error) {
-	if err != nil {
-		testErrorChannel <- err
-	}
-}
-
-type connectionManipulator struct {
-	extension  connector
-	writeDelay time.Duration
-}
-
-func (manipulator *connectionManipulator) ConnectTo(remoteHost string, remotePort int) {
-	manipulator.extension.ConnectTo(remoteHost, remotePort)
-}
-
-func (manipulator *connectionManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	return manipulator.extension.Read(buffer, timestamp)
-}
-
-func (manipulator *connectionManipulator) Close() error {
-	return manipulator.extension.Close()
-}
-
-func (manipulator *connectionManipulator) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	time.Sleep(manipulator.writeDelay)
-	return manipulator.extension.Write(buffer, timestamp)
-}
-
-func (manipulator *connectionManipulator) SetReadTimeout(t time.Duration) {
-	manipulator.extension.SetReadTimeout(t)
-}
-
-func (manipulator *connectionManipulator) reportError(err error) {
-	if err != nil {
-		testErrorChannel <- err
-	}
+	conn          connector
 }
 
 type channelConnector struct {
@@ -137,8 +38,66 @@ type channelConnector struct {
 	artificialNow time.Time
 }
 
-func (connector *channelConnector) ConnectTo(remoteHost string, remotePort int) {
-	panic("not implemented")
+func (manipulator *segmentManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	return manipulator.conn.Read(buffer, timestamp)
+}
+
+func (manipulator *segmentManipulator) Write(buffer []byte) (statusCode, int, error) {
+	seg := createSegment(buffer)
+	for i := 0; i < len(manipulator.toDropOnce); i++ {
+		if manipulator.toDropOnce[i] == seg.getSequenceNumber() {
+			manipulator.toDropOnce = append(manipulator.toDropOnce[:i], manipulator.toDropOnce[i+1:]...)
+			i--
+			return success, len(buffer), nil
+		}
+	}
+	return manipulator.conn.Write(buffer)
+}
+
+func (manipulator *segmentManipulator) DropOnce(sequenceNumber uint32) {
+	manipulator.toDropOnce = append(manipulator.toDropOnce, sequenceNumber)
+}
+
+func (manipulator *segmentManipulator) SetReadTimeout(t time.Duration) {
+	manipulator.conn.SetReadTimeout(t)
+}
+
+func (manipulator *segmentManipulator) Close() error {
+	return manipulator.conn.Close()
+}
+
+func (manipulator *segmentManipulator) reportError(err error) {
+	if err != nil {
+		testErrorChannel <- err
+	}
+}
+
+type connectionManipulator struct {
+	conn       connector
+	writeDelay time.Duration
+}
+
+func (manipulator *connectionManipulator) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	return manipulator.conn.Read(buffer, timestamp)
+}
+
+func (manipulator *connectionManipulator) Close() error {
+	return manipulator.conn.Close()
+}
+
+func (manipulator *connectionManipulator) Write(buffer []byte) (statusCode, int, error) {
+	time.Sleep(manipulator.writeDelay)
+	return manipulator.conn.Write(buffer)
+}
+
+func (manipulator *connectionManipulator) SetReadTimeout(t time.Duration) {
+	manipulator.conn.SetReadTimeout(t)
+}
+
+func (manipulator *connectionManipulator) reportError(err error) {
+	if err != nil {
+		testErrorChannel <- err
+	}
 }
 
 func (connector *channelConnector) Close() error {
@@ -146,7 +105,7 @@ func (connector *channelConnector) Close() error {
 	return nil
 }
 
-func (connector *channelConnector) Write(buffer []byte, _ time.Time) (statusCode, int, error) {
+func (connector *channelConnector) Write(buffer []byte) (statusCode, int, error) {
 	connector.out <- buffer
 	return success, len(buffer), nil
 }
@@ -186,4 +145,16 @@ func (connector *channelConnector) reportError(err error) {
 	if err != nil {
 		testErrorChannel <- err
 	}
+}
+
+func repeatDataSizeInc(s int, n int) string {
+	str := ""
+	for i := 0; i < n; i++ {
+		str += strings.Repeat(string(s+i), getDataChunkSize())
+	}
+	return str
+}
+
+func repeatDataSize(s int, n int) string {
+	return strings.Repeat(string(s), n*getDataChunkSize())
 }

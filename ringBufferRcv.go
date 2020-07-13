@@ -64,7 +64,7 @@ func (ring *ringBufferRcv) insert(seg *segment) bool {
 	return true
 }
 
-func (ring *ringBufferRcv) removeSequence() []*segment {
+func (ring *ringBufferRcv) removeSequence(removeMultiple bool) []*segment {
 	//fast path
 	if ring.buffer[ring.r] == nil {
 		return nil
@@ -79,23 +79,14 @@ func (ring *ringBufferRcv) removeSequence() []*segment {
 			ring.r = (ring.r + 1) % ring.s
 			ring.minGoodSn = seg.getSequenceNumber()
 			ring.drainOverflow()
+			if !removeMultiple {
+				return ret
+			}
 		} else {
 			break
 		}
 	}
 	return ret
-}
-
-func (ring *ringBufferRcv) remove() *segment {
-	if ring.buffer[ring.r] == nil {
-		return nil
-	}
-	seg := ring.buffer[ring.r]
-	ring.buffer[ring.r] = nil
-	ring.r = (ring.r + 1) % ring.s
-	ring.minGoodSn = seg.getSequenceNumber()
-	ring.drainOverflow()
-	return seg
 }
 
 func (ring *ringBufferRcv) drainOverflow() {

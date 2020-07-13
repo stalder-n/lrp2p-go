@@ -9,27 +9,15 @@ import (
 
 type IntegrationTestSuite struct {
 	atpTestSuite
-	alphaSocket                *Socket
-	betaSocket                 *Socket
-	alphaSegManipulator        *segmentManipulator
-	betaSegManipulator         *segmentManipulator
+	alphaSocket                *PeerSocket
+	betaSocket                 *PeerSocket
 	alphaConnectionManipulator *connectionManipulator
 	betaConnectionManipulator  *connectionManipulator
 }
 
 func (suite *IntegrationTestSuite) SetupTest() {
-	alphaUdp, err := udpListen(localhost, 3030, testErrorChannel)
-	suite.handleTestError(err)
-	suite.alphaConnectionManipulator = &connectionManipulator{extension: alphaUdp}
-	suite.alphaSocket = newSocket(suite.alphaConnectionManipulator, testErrorChannel)
-
-	betaUdp, err := udpListen(localhost, 3031, testErrorChannel)
-	suite.handleTestError(err)
-	suite.betaConnectionManipulator = &connectionManipulator{extension: betaUdp}
-	suite.betaSocket = newSocket(suite.betaConnectionManipulator, testErrorChannel)
-
-	suite.alphaSocket.ConnectTo(localhost, 3031)
-	suite.betaSocket.ConnectTo(localhost, 3030)
+	suite.alphaSocket = SocketListen(localhost, 3030)
+	suite.betaSocket = SocketListen(localhost, 3031)
 }
 
 func (suite *IntegrationTestSuite) TearDownTest() {
@@ -37,30 +25,29 @@ func (suite *IntegrationTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaSocket.Close())
 }
 
-func (suite *IntegrationTestSuite) configureConnection(rtt time.Duration) {
-	suite.alphaConnectionManipulator.writeDelay = rtt / 2
-	suite.betaConnectionManipulator.writeDelay = rtt / 2
-}
-
 func (suite *IntegrationTestSuite) TestStableLowLatencyConnection() {
 	if testing.Short() {
 		suite.T().Skip("Skipping integration test")
 	}
-	suite.configureConnection(10 * time.Millisecond)
+	writeDelay := 5 * time.Millisecond
 	mutex := sync.WaitGroup{}
 	mutex.Add(2)
 	go func() {
-		_, _ = suite.alphaSocket.Write([]byte(repeatDataSize(1, 100)))
-		_, _ = suite.alphaSocket.Write([]byte(repeatDataSize(0, 1)))
+		conn := suite.alphaSocket.ConnectTo(localhost, 3031)
+		conn.endpoint = &connectionManipulator{conn: conn.endpoint, writeDelay: writeDelay}
+		_, _ = conn.Write([]byte(repeatDataSize(1, 100)))
+		_, _ = conn.Write([]byte(repeatDataSize(0, 1)))
 		mutex.Done()
 		mutex.Wait()
 	}()
 	go func() {
 		readBuffer := make([]byte, getDataChunkSize())
+		conn := suite.betaSocket.Accept()
+		conn.endpoint = &connectionManipulator{conn: conn.endpoint, writeDelay: writeDelay}
 		for {
-			_, err := suite.betaSocket.Read(readBuffer)
+			n, err := conn.Read(readBuffer)
 			suite.handleTestError(err)
-			if string(readBuffer) == repeatDataSizeInc(0, 1) {
+			if string(readBuffer[:n]) == repeatDataSizeInc(0, 1) {
 				break
 			}
 		}

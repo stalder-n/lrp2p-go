@@ -21,11 +21,20 @@ package atp
 
 import (
 	"bytes"
+	"container/list"
+	"crypto/rand"
+	"encoding/binary"
+	"io"
 	"log"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+)
+
+type (
+	statusCode int
+	connState  int
 )
 
 const (
@@ -34,18 +43,20 @@ const (
 	authDataSize = 64
 )
 
-type statusCode int
-
 const (
 	success statusCode = iota
 	fail
 	ackReceived
 	invalidSegment
 	windowFull
-	waitingForHandshake
-	invalidNonce
 	timeout
 	connectionClosed
+)
+
+const (
+	waitingForHandshake connState = iota
+	connected
+	closed
 )
 
 const (
@@ -53,44 +64,60 @@ const (
 	connectionClosedErrorString = "use of closed network connection"
 )
 
-var timeZero = time.Time{}
+const (
+	retryTimeout       = 10 * time.Millisecond
+	defaultReadTimeout = 10 * time.Millisecond
+)
 
-const retryTimeout = 10 * time.Millisecond
+const newConnRejectThresh = 10
+
+var timeZero = time.Time{}
 
 type position struct {
 	Start int
 	End   int
 }
 
-type udpConnector struct {
-	server       *net.UDPConn
-	remoteAddr   *net.UDPAddr
+type udpSocket struct {
+	local        *net.UDPConn
 	timeout      time.Duration
 	errorChannel chan error
 }
 
-// Socket is an ATP Socket that can open a two-way connection to
-// another Socket. Use atp.SocketConnect to create an instance.
-type Socket struct {
-	readBuffer    bytes.Buffer
-	readNotifier  chan bool
-	mutex         sync.Mutex
-	timeout       time.Duration
-	isReadWriting bool
-	errorChannel  chan error
-	multiplex     map[uint64]*selectiveArq
-}
-
 type connector interface {
+	io.Closer
+	Write([]byte) (statusCode, int, error)
 	Read([]byte, time.Time) (statusCode, int, error)
-	Write([]byte, time.Time) (statusCode, int, error)
-	Close() error
 	SetReadTimeout(time.Duration)
-	ConnectTo(remoteHost string, remotePort int)
-	reportError(error)
 }
 
-type conn struct {
+type udpConnector struct {
+	socket     *udpSocket
+	remoteAddr *net.UDPAddr
+}
+
+type Conn struct {
+	endpoint connector
+	arq      *selectiveArq
+	enc      *encryption
+	state    connState
+	connId   uint64
+
+	readBuffer   bytes.Buffer
+	readNotifier chan bool
+	mutex        sync.Mutex
+	timeout      time.Duration
+}
+
+// PeerSocket is an ATP PeerSocket that can open a two-way connection to
+// another PeerSocket. Use atp.SocketConnect to create an instance.
+type PeerSocket struct {
+	udp             *udpSocket
+	isReadWriting   bool
+	errorChannel    chan error
+	multiplex       map[uint64]*Conn
+	newConnNotifier *sync.Cond
+	newConns        *list.List
 }
 
 // TODO change to reportError(error, chan error) and replace calls with connector.reportError where possible
@@ -100,27 +127,24 @@ func reportError(err error) {
 	}
 }
 
-func connect(connector connector, errors chan error) *selectiveArq {
-	sec := newSecurityExtension(connector, nil, nil, errors)
-	arq := newSelectiveArq(sec, errors)
-	return arq
+func newConnId() uint64 {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return binary.BigEndian.Uint64(b)
 }
 
-func handleError(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
+func newConn(connId uint64, endpoint connector) *Conn {
+	endpoint.SetReadTimeout(defaultReadTimeout)
+	return &Conn{endpoint: endpoint, readNotifier: make(chan bool, 1), connId: connId}
 }
 
-func udpListen(host string, localPort int, errorChannel chan error) (*udpConnector, error) {
-	localAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(host, strconv.Itoa(localPort)))
+func udpListen(localAddr *net.UDPAddr, errorChannel chan error) (*udpSocket, error) {
 	connection, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
 		return nil, err
 	}
-
-	connector := &udpConnector{
-		server:       connection,
+	connector := &udpSocket{
+		local:        connection,
 		timeout:      0,
 		errorChannel: errorChannel,
 	}
@@ -129,99 +153,118 @@ func udpListen(host string, localPort int, errorChannel chan error) (*udpConnect
 }
 
 func createUDPAddress(addressString string, port int) *net.UDPAddr {
-	address := net.JoinHostPort(addressString, strconv.Itoa(port))
-	udpAddress, err := net.ResolveUDPAddr("udp4", address)
-	handleError(err)
+	udpAddress, err := net.ResolveUDPAddr("udp4", net.JoinHostPort(addressString, strconv.Itoa(port)))
+	reportError(err)
 	return udpAddress
 }
 
-func (connector *udpConnector) Close() error {
-	return connector.server.Close()
+func (connector *udpSocket) Close() error {
+	return connector.local.Close()
 }
-func (connector *udpConnector) Write(buffer []byte, timestamp time.Time) (statusCode, int, error) {
-	if connector.remoteAddr == nil {
-		return fail, 0, nil
-	}
-	n, err := connector.server.WriteToUDP(buffer, connector.remoteAddr)
+func (connector *udpSocket) Write(buffer []byte, addr *net.UDPAddr) (statusCode, int, error) {
+	n, err := connector.local.WriteToUDP(buffer, addr)
 	if err != nil {
 		return fail, n, err
 	}
 	return success, n, err
 }
 
-func (connector *udpConnector) ConnectTo(remoteHost string, remotePort int) {
-	connector.remoteAddr = createUDPAddress(remoteHost, remotePort)
-}
-
-func (connector *udpConnector) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+func (connector *udpSocket) Read(buffer []byte, timestamp time.Time) (statusCode, *net.UDPAddr, int, error) {
 	var deadline time.Time
 	if connector.timeout > 0 {
 		deadline = timestamp.Add(connector.timeout)
 	} else {
 		deadline = timeZero
 	}
-	err := connector.server.SetReadDeadline(deadline)
+	err := connector.local.SetReadDeadline(deadline)
 	connector.reportError(err)
-	n, addr, err := connector.server.ReadFromUDP(buffer)
-	if connector.remoteAddr == nil {
-		connector.remoteAddr = addr
-	}
+	n, addr, err := connector.local.ReadFromUDP(buffer)
 	if err != nil {
 		switch err.(type) {
 		case *net.OpError:
 			if err.(*net.OpError).Err.Error() == timeoutErrorString {
-				return timeout, n, nil
+				return timeout, nil, n, nil
 			} else if err.(*net.OpError).Err.Error() == connectionClosedErrorString {
-				return connectionClosed, 0, nil
+				return connectionClosed, nil, 0, nil
 			}
 		}
-		return fail, n, err
+		return fail, nil, n, err
 	}
-	return success, n, err
+	return success, addr, n, err
 }
 
-func (connector *udpConnector) SetReadTimeout(t time.Duration) {
+func (connector *udpSocket) SetReadTimeout(t time.Duration) {
 	connector.timeout = t
 }
 
-func (connector *udpConnector) reportError(err error) {
+func (connector *udpSocket) reportError(err error) {
 	if err != nil {
 		connector.errorChannel <- err
 	}
 }
 
 // SocketListen creates a socket listening on the specified local port for a connection
-func SocketListen(host string, localPort int) *Socket {
+func SocketListen(host string, localPort int) *PeerSocket {
 	errorChannel := make(chan error, 100)
-	connector, err := udpListen(host, localPort, errorChannel)
+	socket, err := udpListen(createUDPAddress(host, localPort), errorChannel)
 	reportError(err)
-	return newSocket(connector, errorChannel)
+	peer := &PeerSocket{
+		udp:             socket,
+		errorChannel:    errorChannel,
+		multiplex:       make(map[uint64]*Conn),
+		newConnNotifier: sync.NewCond(&sync.Mutex{}),
+		newConns:        list.New(),
+	}
+	go peer.write()
+	go peer.read()
+	return peer
 }
 
-func newSocket(connector connector, errorChannel chan error) *Socket {
-	return &Socket{
-		connection:   connect(connector, errorChannel),
-		readNotifier: make(chan bool, 1),
-		errorChannel: errorChannel,
+func (socket *PeerSocket) Accept() *Conn {
+	socket.newConnNotifier.L.Lock()
+	for socket.newConns.Len() == 0 {
+		socket.newConnNotifier.Wait()
 	}
+	conn := socket.newConns.Front().Value.(*Conn)
+	socket.newConnNotifier.L.Unlock()
+
+	socket.multiplex[conn.getConnId()] = conn
+	state := conn.enc.AcceptHandshake(conn)
+	if state != connected {
+		delete(socket.multiplex, conn.getConnId())
+		return nil
+	}
+	conn.state = state
+	return conn
 }
 
 // ConnectTo points this socket to the specified remote host and port
-func (socket *Socket) ConnectTo(remoteHost string, remotePort int) {
-	socket.connection.ConnectTo(remoteHost, remotePort)
+func (socket *PeerSocket) ConnectTo(remoteHost string, remotePort int) *Conn {
+	addr := createUDPAddress(remoteHost, remotePort)
+	conn := newConn(newConnId(), &udpConnector{socket: socket.udp, remoteAddr: addr})
+	conn.arq = newSelectiveArq(conn.writeToUdpEncrypted, socket.errorChannel)
+	conn.enc = newEncryption(socket.errorChannel)
+	socket.multiplex[conn.getConnId()] = conn
+	state := conn.enc.InitiateHandshake(conn)
+	if state != connected {
+		delete(socket.multiplex, conn.getConnId())
+		return nil
+	}
+	conn.state = state
+	return conn
 }
 
 // GetNextError returns the next internal error that occurred, if any is available.
 // As this reads from the underlying error channel used to propagate errors
 // that cannot be properly returned, this method will block while no error is
 // available.
-func (socket *Socket) GetNextError() error {
+func (socket *PeerSocket) GetNextError() error {
 	return <-socket.errorChannel
 }
 
 // TryGetNextError returns the next internal error that occurred. If no errors
 // are found, nil is returned instead instead of blocking
-func (socket *Socket) TryGetNextError() error {
+func (socket *PeerSocket) TryGetNextError() error {
 	if len(socket.errorChannel) > 0 {
 		return <-socket.errorChannel
 	}
@@ -229,105 +272,135 @@ func (socket *Socket) TryGetNextError() error {
 }
 
 // Close closes the underlying two-way connection interface, preventing all
-// future calls to Socket.Write and Socket.Read from having any effect
-func (socket *Socket) Close() error {
-	return socket.connection.Close()
+// future calls to PeerSocket.Write and PeerSocket.Read from having any effect
+func (socket *PeerSocket) Close() error {
+	return socket.udp.Close()
 }
 
-// Write writes the specified buffer to the socket's underlying connection
-func (socket *Socket) Write(buffer []byte) (int, error) {
-	_, _, err := socket.connection.Write(buffer, time.Now())
-	if !socket.isReadWriting {
-		go socket.write()
-		go socket.read()
-		go socket.checkForSegmentTimeout()
-		socket.isReadWriting = true
-	}
-	return len(buffer), err
-}
-
-func (socket *Socket) write() {
+func (socket *PeerSocket) write() {
 	for {
-		statusCode, _, _ := socket.connection.Write(nil, time.Now())
-		switch statusCode {
-		case connectionClosed:
-			return
+		for _, c := range socket.multiplex {
+			c.arq.retransmitTimedOutSegments(time.Now())
+			_, _ = c.arq.writeQueuedSegments(time.Now())
 		}
 		time.Sleep(retryTimeout)
 	}
 }
 
-// Read reads from the underlying connection interface
-func (socket *Socket) Read(buffer []byte) (int, error) {
-	if !socket.isReadWriting {
-		go socket.read()
-		go socket.write()
-		go socket.checkForSegmentTimeout()
-		socket.isReadWriting = true
+func (socket *PeerSocket) read() {
+	for {
+		buffer := make([]byte, segmentMtu)
+		status, addr, n, err := socket.udp.Read(buffer, time.Now())
+		reportError(err)
+		if status != success {
+			continue
+		}
+		connId := binary.BigEndian.Uint64(buffer[:8])
+		if c, ok := socket.multiplex[connId]; ok {
+			if c.state == waitingForHandshake {
+				c.enc.messageNotifier.L.Lock()
+				c.enc.handshakeMessage = buffer[8:n]
+				c.enc.messageNotifier.L.Unlock()
+				c.enc.messageNotifier.Signal()
+				continue
+			}
+
+			n, err = c.enc.Decrypt(buffer[8:n], buffer)
+			status, segs := c.arq.processReceivedSegment(buffer[:n], true, time.Now())
+
+			if status == success {
+				c.mutex.Lock()
+				for _, seg := range segs {
+					c.readBuffer.Write(seg.data)
+				}
+				c.mutex.Unlock()
+				if len(c.readNotifier) == 0 {
+					c.readNotifier <- true
+				}
+			}
+		} else {
+			if socket.newConns.Len() >= newConnRejectThresh {
+				continue // reject all incoming connection requests if 10 or more are pending
+			}
+			conn := newConn(connId, &udpConnector{socket: socket.udp, remoteAddr: addr})
+			conn.arq = newSelectiveArq(conn.writeToUdpEncrypted, socket.errorChannel)
+			conn.enc = newEncryption(socket.errorChannel)
+			conn.enc.handshakeMessage = buffer[8:n]
+			socket.newConnNotifier.L.Lock()
+			socket.newConns.PushBack(conn)
+			socket.newConnNotifier.L.Unlock()
+			socket.newConnNotifier.Signal()
+		}
 	}
-	socket.mutex.Lock()
-	for socket.readBuffer.Len() == 0 {
-		socket.mutex.Unlock()
-		if socket.timeout > 0 {
+}
+
+func (c *Conn) Read(buffer []byte) (int, error) {
+	c.mutex.Lock()
+	for c.readBuffer.Len() == 0 {
+		c.mutex.Unlock()
+		if c.timeout > 0 {
 			select {
-			case <-socket.readNotifier:
-				socket.mutex.Lock()
-			case <-time.After(socket.timeout):
+			case <-c.readNotifier:
+				c.mutex.Lock()
+			case <-time.After(c.timeout):
 				return 0, nil
 			}
 		} else {
 			select {
-			case <-socket.readNotifier:
-				socket.mutex.Lock()
+			case <-c.readNotifier:
+				c.mutex.Lock()
 			}
 		}
 	}
-	n, err := socket.readBuffer.Read(buffer)
-	socket.mutex.Unlock()
+	n, err := c.readBuffer.Read(buffer)
+	c.mutex.Unlock()
 	return n, err
 }
 
-func (socket *Socket) read() {
-	for {
-		buffer := make([]byte, segmentMtu)
-		statusCode, n, err := socket.connection.Read(buffer, time.Now())
-		socket.connection.reportError(err)
-		switch statusCode {
-		case success:
-			socket.mutex.Lock()
-			socket.readBuffer.Write(buffer[:n])
-			socket.mutex.Unlock()
-			if len(socket.readNotifier) == 0 {
-				socket.readNotifier <- true
-			}
-		case ackReceived:
-		case invalidNonce:
-		case invalidSegment:
-		case connectionClosed:
-			return
-		}
-	}
+func (c *Conn) Write(buffer []byte) (int, error) {
+	c.arq.queueNewSegments(buffer)
+	return len(buffer), nil
 }
 
 // SetReadTimeout sets an idle timeout for read operations
-func (socket *Socket) SetReadTimeout(timeout time.Duration) {
-	socket.timeout = timeout
+func (c *Conn) SetReadTimeout(timeout time.Duration) {
+	c.timeout = timeout
 }
 
-func (socket *Socket) checkForSegmentTimeout() {
-	for {
-		if socket.connection.sRtt == 0 {
-			select {
-			case <-time.After(socket.connection.rto):
-				_, _, err := socket.connection.Write(nil, time.Now())
-				reportError(err)
-			}
-		} else {
-			select {
-			case <-time.After(time.Duration(socket.connection.sRtt)):
-				_, _, err := socket.connection.Write(nil, time.Now())
-				reportError(err)
-			}
-		}
+func (c *Conn) readFromEndpoint(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	return c.endpoint.Read(buffer, timestamp)
+}
+
+func (c *Conn) writeToEndpoint(buffer []byte) (statusCode, int, error) {
+	return c.endpoint.Write(buffer)
+}
+
+func (c *Conn) writeToUdpEncrypted(payload []byte) (statusCode, int, error) {
+	buf := make([]byte, segmentMtu)
+	n, err := c.enc.Encrypt(payload, buf[8:])
+	if err != nil {
+		return fail, 0, err
 	}
+	binary.BigEndian.PutUint64(buf, c.getConnId())
+	return c.endpoint.Write(buf[:n+8])
+}
+
+func (c *Conn) getConnId() uint64 {
+	return c.connId
+}
+
+func (udp *udpConnector) Write(buffer []byte) (statusCode, int, error) {
+	return udp.socket.Write(buffer, udp.remoteAddr)
+}
+
+func (udp *udpConnector) Read(buffer []byte, timestamp time.Time) (statusCode, int, error) {
+	status, _, n, err := udp.socket.Read(buffer, timestamp)
+	return status, n, err
+}
+
+func (udp *udpConnector) Close() error {
+	return udp.socket.Close()
+}
+func (udp *udpConnector) SetReadTimeout(t time.Duration) {
+	udp.socket.SetReadTimeout(t)
 }

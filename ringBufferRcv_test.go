@@ -14,7 +14,7 @@ func TestInsertOutOfOrder(t *testing.T) {
 	inserted := r.insert(seg)
 	assert.True(t, inserted)
 
-	s := r.removeSequence()
+	s := r.removeSequence(true)
 	assert.Equal(t, len(s), 0)
 }
 
@@ -28,7 +28,7 @@ func TestInsertOutOfOrder2(t *testing.T) {
 	inserted = r.insert(seg)
 	assert.True(t, inserted)
 
-	s := r.removeSequence()
+	s := r.removeSequence(true)
 	assert.Equal(t, len(s), 2)
 }
 
@@ -39,14 +39,14 @@ func TestInsertBackwards(t *testing.T) {
 		inserted := r.insert(seg)
 		assert.True(t, inserted)
 	}
-	s := r.removeSequence()
+	s := r.removeSequence(true)
 	assert.Equal(t, len(s), 0)
 
 	seg := makeSegment(0)
 	inserted := r.insert(seg)
 	assert.True(t, inserted)
 
-	s = r.removeSequence()
+	s = r.removeSequence(true)
 	assert.Equal(t, len(s), 10)
 
 }
@@ -84,7 +84,7 @@ func TestModulo(t *testing.T) {
 		assert.True(t, inserted)
 	}
 
-	s := r.removeSequence()
+	s := r.removeSequence(true)
 	assert.Equal(t, len(s), 10)
 
 	for i := 10; i < 20; i++ {
@@ -93,7 +93,7 @@ func TestModulo(t *testing.T) {
 		assert.True(t, inserted)
 	}
 
-	s = r.removeSequence()
+	s = r.removeSequence(true)
 	assert.Equal(t, len(s), 10)
 }
 
@@ -138,7 +138,7 @@ func TestFuzz2(t *testing.T) {
 		}
 		seqIns += j
 
-		s := r.removeSequence()
+		s := r.removeSequence(true)
 
 		if rand.Intn(3) == 0 {
 			r = r.resize(r.size() + 1)
