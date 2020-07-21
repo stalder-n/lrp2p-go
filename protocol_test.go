@@ -2,6 +2,7 @@ package atp
 
 import (
 	"github.com/stretchr/testify/suite"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -9,19 +10,22 @@ import (
 
 type UDPConnectorTestSuite struct {
 	atpTestSuite
-	alphaConnection *udpConnector
-	betaConnection  *udpConnector
+	alphaConnection *udpSocket
+	betaConnection  *udpSocket
+	alphaAddr       *net.UDPAddr
+	betaAddr        *net.UDPAddr
 }
 
 func (suite *UDPConnectorTestSuite) SetupTest() {
-	alphaConnection, err := udpListen(localhost, 3030, testErrorChannel)
+	suite.alphaAddr = createUDPAddress(localhost, 3030)
+	suite.betaAddr = createUDPAddress(localhost, 3031)
+	alphaConnection, err := udpListen(suite.alphaAddr, testErrorChannel)
 	suite.handleTestError(err)
-	betaConnection, err := udpListen(localhost, 3031, testErrorChannel)
+	betaConnection, err := udpListen(suite.betaAddr, testErrorChannel)
 	suite.handleTestError(err)
-	alphaConnection.ConnectTo("localhost", 3031)
-	betaConnection.ConnectTo("localhost", 3030)
 	suite.alphaConnection = alphaConnection
 	suite.betaConnection = betaConnection
+	suite.timestamp = time.Now()
 }
 
 func (suite *UDPConnectorTestSuite) TearDownTest() {
@@ -29,202 +33,120 @@ func (suite *UDPConnectorTestSuite) TearDownTest() {
 	suite.handleTestError(suite.betaConnection.Close())
 }
 
-func (suite *UDPConnectorTestSuite) TestSimpleGreeting() {
+func (suite *UDPConnectorTestSuite) TestSimpleUDPConnection() {
 	expectedAlpha := "Hello beta"
 	expectedBeta := "Hello alpha"
-	timestamp := time.Now()
-	suite.write(suite.alphaConnection, expectedAlpha, timestamp)
-	suite.write(suite.betaConnection, expectedBeta, timestamp)
-	suite.read(suite.betaConnection, expectedAlpha, timestamp)
-	suite.read(suite.alphaConnection, expectedBeta, timestamp)
+	suite.write(suite.alphaConnection, suite.betaAddr, expectedAlpha)
+	suite.write(suite.betaConnection, suite.alphaAddr, expectedBeta)
+	suite.read(suite.betaConnection, expectedAlpha)
+	suite.read(suite.alphaConnection, expectedBeta)
+}
+
+func (suite *UDPConnectorTestSuite) write(socket *udpSocket, addr *net.UDPAddr, payload string) {
+	status, n, err := socket.Write([]byte(payload), addr)
+	suite.Equal(success, status)
+	suite.Equal(len(payload), n)
+	suite.handleTestError(err)
+}
+
+func (suite *UDPConnectorTestSuite) read(socket *udpSocket, expected string) {
+	buffer := make([]byte, segmentMtu)
+	status, _, n, err := socket.Read(buffer, suite.timestamp)
+	suite.Equal(success, status)
+	suite.Equal(expected, string(buffer[:n]))
+	suite.handleTestError(err)
 }
 
 func TestUdpConnector(t *testing.T) {
 	suite.Run(t, new(UDPConnectorTestSuite))
 }
 
-type SecureConnectionTestSuite struct {
+type PeerSocketTestSuite struct {
 	atpTestSuite
-	alphaConnection *securityExtension
-	betaConnection  *securityExtension
+	socketA *PeerSocket
+	socketB *PeerSocket
 }
 
-func (suite *SecureConnectionTestSuite) SetupTest() {
-	alphaConnector, err := udpListen(localhost, 3030, testErrorChannel)
-	suite.handleTestError(err)
-	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
-	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
-	suite.alphaConnection = newSecurityExtension(alphaConnector, nil, nil, testErrorChannel)
-	suite.betaConnection = newSecurityExtension(betaConnector, nil, nil, testErrorChannel)
+func (suite *PeerSocketTestSuite) SetupTest() {
+	suite.socketA = SocketListen(localhost, 3030)
+	suite.socketB = SocketListen(localhost, 3031)
 }
 
-func (suite *SecureConnectionTestSuite) TearDownTest() {
-	suite.handleTestError(suite.alphaConnection.Close())
-	suite.handleTestError(suite.betaConnection.Close())
+func (suite *PeerSocketTestSuite) TearDownTest() {
+	suite.handleTestError(suite.socketA.Close())
+	suite.handleTestError(suite.socketB.Close())
 }
 
-func (suite *SecureConnectionTestSuite) TestSimpleGreeting() {
-	expectedAlpha := "Hello beta"
-	expectedBeta := "Hello alpha"
-	timestamp := time.Now()
+func (suite *PeerSocketTestSuite) TestOneToOneConnection() {
+	expectedA := []byte("Hello World A")
+	expectedB := []byte("Hello World B")
 	mutex := sync.WaitGroup{}
 	mutex.Add(2)
 	go func() {
-		suite.write(suite.alphaConnection, expectedAlpha, timestamp)
-		suite.read(suite.alphaConnection, expectedBeta, timestamp)
+		conn := suite.socketA.ConnectTo(localhost, 3031)
+		suite.NotNil(conn)
+		n, err := conn.Write(expectedA)
+		suite.handleTestError(err)
+		buffer := make([]byte, 128)
+		n, err = conn.Read(buffer)
+		suite.Equal(expectedB, buffer[:n])
+		suite.handleTestError(err)
 		mutex.Done()
 	}()
 	go func() {
-		suite.read(suite.betaConnection, expectedAlpha, timestamp)
-		suite.write(suite.betaConnection, expectedBeta, timestamp)
+		conn := suite.socketB.Accept()
+		suite.NotNil(conn)
+		n, err := conn.Write(expectedB)
+		suite.handleTestError(err)
+		buffer := make([]byte, 128)
+		n, err = conn.Read(buffer)
+		suite.Equal(expectedA, buffer[:n])
+		suite.handleTestError(err)
 		mutex.Done()
 	}()
 	mutex.Wait()
 }
 
-func TestSecureConnection(t *testing.T) {
-	suite.Run(t, new(SecureConnectionTestSuite))
-}
-
-type ArqConnectionTestSuite struct {
-	atpTestSuite
-	alphaConnection *selectiveArq
-	betaConnection  *selectiveArq
-}
-
-func (suite *ArqConnectionTestSuite) SetupTest() {
-	alphaConnector, err := udpListen(localhost, 3030, testErrorChannel)
-	suite.handleTestError(err)
-	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
-	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
-	suite.alphaConnection = newSelectiveArq(1, alphaConnector, testErrorChannel)
-	suite.betaConnection = newSelectiveArq(1, betaConnector, testErrorChannel)
-}
-
-func (suite *ArqConnectionTestSuite) TearDownTest() {
-	suite.handleTestError(suite.alphaConnection.Close())
-	suite.handleTestError(suite.betaConnection.Close())
-}
-
-func (suite *ArqConnectionTestSuite) TestSimpleGreeting() {
-	expectedAlpha := "Hello beta"
-	expectedBeta := "Hello alpha"
-	timestamp := time.Now()
-	suite.write(suite.alphaConnection, expectedAlpha, timestamp)
-	suite.read(suite.betaConnection, expectedAlpha, timestamp)
-	suite.readAck(suite.alphaConnection, timestamp)
-
-	suite.write(suite.betaConnection, expectedBeta, timestamp)
-	suite.read(suite.alphaConnection, expectedBeta, timestamp)
-	suite.readAck(suite.betaConnection, timestamp)
-}
-
-func TestArqConnection(t *testing.T) {
-	suite.Run(t, new(ArqConnectionTestSuite))
-}
-
-type FullConnectionTestSuite struct {
-	atpTestSuite
-	alphaConnection connector
-	betaConnection  connector
-}
-
-func (suite *FullConnectionTestSuite) SetupTest() {
-	alphaConnector, err := udpListen(localhost, 3030, testErrorChannel)
-	suite.handleTestError(err)
-	betaConnector, err := udpListen(localhost, 3031, testErrorChannel)
-	suite.handleTestError(err)
-	alphaConnector.ConnectTo("localhost", 3031)
-	betaConnector.ConnectTo("localhost", 3030)
-	suite.alphaConnection = connect(alphaConnector, testErrorChannel)
-	suite.betaConnection = connect(betaConnector, testErrorChannel)
-
-}
-
-func (suite *FullConnectionTestSuite) TearDownTest() {
-	suite.handleTestError(suite.alphaConnection.Close())
-	suite.handleTestError(suite.betaConnection.Close())
-}
-
-func (suite *FullConnectionTestSuite) TestSimpleGreeting() {
-	expectedAlpha := "Hello beta"
-	expectedBeta := "Hello alpha"
-	timestamp := time.Now()
+func (suite *PeerSocketTestSuite) TestMultiplexing() {
+	socketC := SocketListen(localhost, 3032)
+	expectedA := []byte("Hello World A")
+	expectedB := []byte("Hello World B")
 	mutex := sync.WaitGroup{}
 	mutex.Add(2)
 	go func() {
-		suite.write(suite.alphaConnection, expectedAlpha, timestamp)
-		suite.readAck(suite.alphaConnection, timestamp)
-		suite.read(suite.alphaConnection, expectedBeta, timestamp)
-		suite.readExpectStatus(suite.alphaConnection, timeout, suite.timeout())
+		conn1 := suite.socketA.ConnectTo(localhost, 3031)
+		conn2 := suite.socketA.Accept()
+		suite.NotNil(conn1)
+		suite.NotNil(conn2)
+
+		n, err := conn2.Write(expectedA)
+		suite.handleTestError(err)
+
+		buffer := make([]byte, 128)
+		n, err = conn1.Read(buffer)
+		suite.Equal(expectedB, buffer[:n])
+		suite.handleTestError(err)
 		mutex.Done()
 	}()
 	go func() {
-		suite.read(suite.betaConnection, expectedAlpha, timestamp)
-		suite.readExpectStatus(suite.betaConnection, timeout, suite.timeout())
-		suite.write(suite.betaConnection, expectedBeta, timestamp)
-		suite.readAck(suite.betaConnection, timestamp)
+		conn1 := suite.socketB.Accept()
+		conn2 := socketC.ConnectTo(localhost, 3030)
+		suite.NotNil(conn1)
+		suite.NotNil(conn2)
+
+		n, err := conn1.Write(expectedB)
+		suite.handleTestError(err)
+
+		buffer := make([]byte, 128)
+		n, err = conn2.Read(buffer)
+		suite.Equal(expectedA, buffer[:n])
+		suite.handleTestError(err)
 		mutex.Done()
 	}()
 	mutex.Wait()
-}
-
-func TestFullConnection(t *testing.T) {
-	suite.Run(t, new(FullConnectionTestSuite))
-}
-
-type SocketTestSuite struct {
-	atpTestSuite
-	alphaSocket *Socket
-	betaSocket  *Socket
-}
-
-func (suite *SocketTestSuite) SetupTest() {
-	suite.alphaSocket = SocketListen(localhost, 3030)
-	suite.betaSocket = SocketListen(localhost, 3031)
-	suite.alphaSocket.ConnectTo("localhost", 3031)
-	suite.betaSocket.ConnectTo("localhost", 3030)
-}
-
-func (suite *SocketTestSuite) TearDownTest() {
-	suite.handleTestError(suite.alphaSocket.Close())
-	suite.handleTestError(suite.betaSocket.Close())
-}
-
-func (suite *SocketTestSuite) TestSimpleGreeting() {
-	expectedAlpha := "Hello beta"
-	expectedBeta := "Hello alpha"
-	mutex := sync.WaitGroup{}
-	mutex.Add(2)
-	go func() {
-		n, err := suite.alphaSocket.Write([]byte(expectedAlpha))
-		suite.handleTestError(err)
-		suite.Equal(len(expectedAlpha), n)
-
-		readBuffer := make([]byte, segmentMtu)
-		n, err = suite.alphaSocket.Read(readBuffer)
-		suite.handleTestError(err)
-		suite.Equal(len(expectedBeta), n)
-		mutex.Done()
-	}()
-	go func() {
-		readBuffer := make([]byte, segmentMtu)
-		n, err := suite.betaSocket.Read(readBuffer)
-		suite.handleTestError(err)
-		suite.Equal(len(expectedAlpha), n)
-
-		n, err = suite.betaSocket.Write([]byte(expectedBeta))
-		suite.handleTestError(err)
-		suite.Equal(len(expectedBeta), n)
-		mutex.Done()
-	}()
-	mutex.Wait()
+	socketC.Close()
 }
 
 func TestSocketConnection(t *testing.T) {
-	suite.Run(t, new(SocketTestSuite))
+	suite.Run(t, new(PeerSocketTestSuite))
 }

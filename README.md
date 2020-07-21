@@ -19,14 +19,13 @@ While ATP is a general purpose protocol, it is especially useful for developers 
 package main
 
 import (
-    "fmt"
-    "github.com/nicosta1132/atp-go"
+    "github.com/nicosta1132/atp"
 )
 
 func main() {
-    socket := atp.SocketListen("127.0.0.1", 3030)
-    socket.ConnectTo("localhost", 3031)
-    _, err := socket.Write([]byte("Hello World"))
+    socket := atp.SocketListen("", 3030)
+    conn := socket.ConnectTo("<Peer 2 ip address>", 3030)
+    _, err := conn.Write([]byte("Hello World"))
     if err != nil {
         panic(err)
     }
@@ -38,21 +37,88 @@ package main
 
 import (
     "fmt"
-    "github.com/nicosta1132/atp-go"
+    "github.com/nicosta1132/atp"
 )
 
 func main() {
-    socket := atp.SocketListen("127.0.0.1", 3031)
-    socket.ConnectTo("localhost", 3030)
+    socket := atp.SocketListen("", 3030)
+    conn := socket.Accept()
     readBuffer := make([]byte, 32)
-    n, err := socket.Read(readBuffer)
+    n, err := conn.Read(readBuffer)
+    if err != nil {
+        panic(err)
+    }
     fmt.Println(string(readBuffer[:n]))
+}
+```
+
+## Multiplexing example
+
+### Peer 1
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/nicosta1132/atp"
+)
+
+func main() {
+    socket := atp.SocketListen("", 3030)
+    conn1 := socket.Accept()
+    conn2 := socket.Accept()
+    
+    // read from first connection
+    readBuffer := make([]byte, 64)
+    n,err := conn1.Read(readBuffer)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(readBuffer[:n]))
+    
+    // read from first connection
+    n,err = conn2.Read(readBuffer)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(readBuffer[:n]))
+}
+```
+### Peer 2
+```go
+package main
+
+import (
+    "github.com/nicosta1132/atp"
+)
+
+func main() {
+    socket := atp.SocketListen("", 3030)
+    conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
+    _, err := conn.Write([]byte("Hello from Peer 2"))
     if err != nil {
         panic(err)
     }
 }
 ```
 
+### Peer 3
+```go
+package main
+
+import (
+    "github.com/nicosta1132/atp"
+)
+
+func main() {
+    socket := atp.SocketListen("", 3030)
+    conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
+    _, err := conn.Write([]byte("Hello from Peer 3"))
+    if err != nil {
+        panic(err)
+    }
+}
+```
 ## Specification
 
 ### Data Segment Header
@@ -72,7 +138,7 @@ Sequence Number:
 ```
 
 ### ACK Segment
-| Data Offset (1B) | Flags (1B) | Sequence Number (4B) | Window Size (4B) |
+| Data Offset (1B) | Flags (1B) | Sequence Number (4B) | Window Size (3B) |
 | ---------------- | ---------- | -------------------- | ---------------- |
 
 ```
@@ -86,5 +152,15 @@ Sequence Number:
     32-bit sequence number designating a segments order. For ACKS, this is always the last in-order number
 
 Window Size:
-    32-bit number telling the sender how large its congestion window may grow
+    24-bit number telling the sender how large its congestion window may grow
 ```
+
+### Window Size of the SND and RCV buffer
+
+The buffer size needs to be at least as large as the [BDP](https://en.wikipedia.org/wiki/Bandwidth-delay_product). TCP can increase the window size of to 1'073'725'440 and is measured in bytes. ATP measures in packets, and a packet size of 1400 is assumed.
+
+To allow a 100Gibt/s over a sattelite link with 600ms RTT one has:
+```
+100'000'000'000 x 0.6 / 8 = 7.5 GByte
+```
+which means that 7.5GB can be in transit. The number of packets is ~5.3mio assuming packet size of 1400. Thus, 23bit would fit, and therefore we chose 24bit, 3 bytes to store the window size.

@@ -8,13 +8,6 @@ import (
 var segmentMtu = defaultMTU
 
 const (
-	ackDelimStart byte = 1
-	ackDelimSeq   byte = 2
-	ackDelimRange byte = 4
-	ackDelimEnd   byte = 8
-)
-
-const (
 	flagACK byte = 1
 	flagSYN byte = 2
 
@@ -31,7 +24,7 @@ var sequenceNumberPosition = position{2, 6}
 var windowSizePosition = position{6, 10}
 
 func getDataChunkSize() int {
-	return segmentMtu - headerLength
+	return segmentMtu - headerLength - authDataSize
 }
 
 func bytesToUint32(buffer []byte) uint32 {
@@ -98,6 +91,12 @@ func (seg *segment) getDataAsString() string {
 	return string(seg.data)
 }
 
+func (seg *segment) updateTimestamp(status statusCode, timestamp time.Time) {
+	if status == success {
+		seg.timestamp = timestamp
+	}
+}
+
 func setDataOffset(buffer []byte, dataOffset byte) {
 	buffer[dataOffsetPosition.Start] = dataOffset
 }
@@ -146,45 +145,4 @@ func createAckSegment(lastInOrder, sequenceNumber, windowSize uint32) *segment {
 	seg := createFlaggedSegment(lastInOrder, flagACK, uint32ToBytes(sequenceNumber))
 	seg.setWindowSize(windowSize)
 	return seg
-}
-
-func insertSegmentInOrder(segments []*segment, insert *segment) []*segment {
-	for i, seg := range segments {
-		if insert.getSequenceNumber() < seg.getSequenceNumber() {
-			segments = append(segments, nil)
-			copy(segments[i+1:], segments[i:])
-			segments[i] = insert
-			return segments
-		}
-		if insert.getSequenceNumber() == seg.getSequenceNumber() {
-			return segments
-		}
-	}
-	return append(segments, insert)
-}
-
-func removeSegment(segments []*segment, sequenceNumber uint32) (*segment, []*segment) {
-	for i, seg := range segments {
-		if seg.getSequenceNumber() == sequenceNumber {
-			return seg, append(segments[:i], segments[i+1:]...)
-		}
-	}
-	return nil, segments
-}
-
-func removeAllSegmentsWhere(segments []*segment, condition func(*segment) bool) (removed []*segment, orig []*segment) {
-	removed = make([]*segment, 0, len(segments))
-	for i := 0; i < len(segments); i++ {
-		seg := segments[i]
-		if condition(seg) {
-			segments = append(segments[:i], segments[i+1:]...)
-			removed = append(removed, seg)
-			i--
-		}
-	}
-	return removed, segments
-}
-
-func popSegment(segments []*segment) (*segment, []*segment) {
-	return segments[0], segments[1:]
 }
