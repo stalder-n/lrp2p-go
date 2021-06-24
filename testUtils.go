@@ -1,6 +1,7 @@
 package lrp2p
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/suite"
 	"strings"
 	"time"
@@ -150,11 +151,11 @@ func (connector *channelConnector) reportError(err error) {
 func repeatDataSizeInc(s int, n int) string {
 	str := ""
 	for i := 0; i < n; i++ {
-		str += strings.Repeat(string(s+i), getDataChunkSize())
+		str += strings.Repeat(fmt.Sprintf("%c", s+i), getDataChunkSize())
 	}
 	return str
 }
 
 func repeatDataSize(s int, n int) string {
-	return strings.Repeat(string(s), n*getDataChunkSize())
+	return strings.Repeat(fmt.Sprintf("%c", s), n*getDataChunkSize())
 }
