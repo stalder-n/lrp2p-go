@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 import (
 	"github.com/stretchr/testify/suite"
@@ -8,7 +8,7 @@ import (
 )
 
 type IntegrationTestSuite struct {
-	atpTestSuite
+	lrp2pTestSuite
 	alphaSocket                *PeerSocket
 	betaSocket                 *PeerSocket
 	alphaConnectionManipulator *connectionManipulator

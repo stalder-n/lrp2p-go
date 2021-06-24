@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 import (
 	"github.com/stretchr/testify/suite"
@@ -9,7 +9,7 @@ import (
 )
 
 type UDPConnectorTestSuite struct {
-	atpTestSuite
+	lrp2pTestSuite
 	alphaConnection *udpSocket
 	betaConnection  *udpSocket
 	alphaAddr       *net.UDPAddr
@@ -62,7 +62,7 @@ func TestUdpConnector(t *testing.T) {
 }
 
 type PeerSocketTestSuite struct {
-	atpTestSuite
+	lrp2pTestSuite
 	socketA *PeerSocket
 	socketB *PeerSocket
 }

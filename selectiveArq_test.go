@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 import (
 	"github.com/stretchr/testify/suite"
@@ -7,7 +7,7 @@ import (
 )
 
 type ArqTestSuite struct {
-	atpTestSuite
+	lrp2pTestSuite
 	alphaArq, betaArq                 *selectiveArq
 	alphaManipulator, betaManipulator *segmentManipulator
 	alphaConn, betaConn               *Conn

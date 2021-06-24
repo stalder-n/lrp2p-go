@@ -1,13 +1,16 @@
-# ATP - ARQ Transmission Protocol
-![go test](https://github.com/nicosta1132/atp-go/workflows/go%20test/badge.svg)
+# LRP2P - Lightweight Reliable Peer 2 Peer
+
+![go test](https://github.com/stalder-n/lrp2p/workflows/go%20test/badge.svg)
 
 ## Introduction
-ATP is a 0-RTT network protocol with reliability features and built-in asymmetric encryption. It is intended to be similar in features to TCP, while avoiding some of its drawbacks.
 
-While ATP is a general purpose protocol, it is especially useful for developers dealing with peer-to-peer transfer problems, due to its inherent capability of sending and receiving simultaneously.
+LRP2P is a peer to peer network protocol with reliability features and built-in asymmetric encryption. It's intended to
+be similar in features to TCP, while avoiding some of its drawbacks.
 
 ## Features
+
 * Reliable data delivery
+* Peer-to-Peer; every socket can maintain unlimited peers
 * Built-in asymmetric encryption
 * Connectionless communication using UDP
 * Native Go interface (ReadWriteCloser)
@@ -15,116 +18,124 @@ While ATP is a general purpose protocol, it is especially useful for developers 
 ## Simple Example
 
 ### Peer 1
+
 ```go
 package main
 
 import (
-    "github.com/nicosta1132/atp"
+	p2p "github.com/stalder-n/lrp2p"
 )
 
 func main() {
-    socket := atp.SocketListen("", 3030)
-    conn := socket.ConnectTo("<Peer 2 ip address>", 3030)
-    _, err := conn.Write([]byte("Hello World"))
-    if err != nil {
-        panic(err)
-    }
+	socket := p2p.SocketListen("", 3030)
+	conn := socket.ConnectTo("<Peer 2 ip address>", 3030)
+	_, err := conn.Write([]byte("Hello World"))
+	if err != nil {
+		panic(err)
+	}
 }
 ```
+
 ### Peer 2
+
 ```go
 package main
 
 import (
-    "fmt"
-    "github.com/nicosta1132/atp"
+	"fmt"
+	p2p "github.com/stalder-n/lrp2p"
 )
 
 func main() {
-    socket := atp.SocketListen("", 3030)
-    conn := socket.Accept()
-    readBuffer := make([]byte, 32)
-    n, err := conn.Read(readBuffer)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(string(readBuffer[:n]))
+	socket := p2p.SocketListen("", 3030)
+	conn := socket.Accept()
+	readBuffer := make([]byte, 32)
+	n, err := conn.Read(readBuffer)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(readBuffer[:n]))
 }
 ```
 
 ## Multiplexing example
 
 ### Peer 1
+
 ```go
 package main
 
 import (
-    "fmt"
-    "github.com/nicosta1132/atp"
+	"fmt"
+	p2p "github.com/stalder-n/lrp2p"
 )
 
 func main() {
-    socket := atp.SocketListen("", 3030)
-    conn1 := socket.Accept()
-    conn2 := socket.Accept()
-    
-    // read from first connection
-    readBuffer := make([]byte, 64)
-    n,err := conn1.Read(readBuffer)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(string(readBuffer[:n]))
-    
-    // read from first connection
-    n,err = conn2.Read(readBuffer)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(string(readBuffer[:n]))
+	socket := p2p.SocketListen("", 3030)
+	conn1 := socket.Accept()
+	conn2 := socket.Accept()
+
+	// read from first connection
+	readBuffer := make([]byte, 64)
+	n, err := conn1.Read(readBuffer)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(readBuffer[:n]))
+
+	// read from first connection
+	n, err = conn2.Read(readBuffer)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(readBuffer[:n]))
 }
 ```
+
 ### Peer 2
+
 ```go
 package main
 
 import (
-    "github.com/nicosta1132/atp"
+	p2p "github.com/stalder-n/lrp2p"
 )
 
 func main() {
-    socket := atp.SocketListen("", 3030)
-    conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
-    _, err := conn.Write([]byte("Hello from Peer 2"))
-    if err != nil {
-        panic(err)
-    }
+	socket := p2p.SocketListen("", 3030)
+	conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
+	_, err := conn.Write([]byte("Hello from Peer 2"))
+	if err != nil {
+		panic(err)
+	}
 }
 ```
 
 ### Peer 3
+
 ```go
 package main
 
 import (
-    "github.com/nicosta1132/atp"
+	p2p "github.com/stalder-n/lrp2p"
 )
 
 func main() {
-    socket := atp.SocketListen("", 3030)
-    conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
-    _, err := conn.Write([]byte("Hello from Peer 3"))
-    if err != nil {
-        panic(err)
-    }
+	socket := p2p.SocketListen("", 3030)
+	conn := socket.ConnectTo("<Peer 1 ip address>", 3030)
+	_, err := conn.Write([]byte("Hello from Peer 3"))
+	if err != nil {
+		panic(err)
+	}
 }
 ```
+
 ## Specification
 
 ### Data Segment Header
+
 | Data Offset (1B) | Flags (1B) | Sequence Number (4B) | 
 | ---------------- | ---------- | -------------------- |
-
 
 ```
 Data Offset:
@@ -138,6 +149,7 @@ Sequence Number:
 ```
 
 ### ACK Segment
+
 | Data Offset (1B) | Flags (1B) | Sequence Number (4B) | Window Size (3B) |
 | ---------------- | ---------- | -------------------- | ---------------- |
 
@@ -157,10 +169,15 @@ Window Size:
 
 ### Window Size of the SND and RCV buffer
 
-The buffer size needs to be at least as large as the [BDP](https://en.wikipedia.org/wiki/Bandwidth-delay_product). TCP can increase the window size of to 1'073'725'440 and is measured in bytes. ATP measures in packets, and a packet size of 1400 is assumed.
+The buffer size needs to be at least as large as the [BDP](https://en.wikipedia.org/wiki/Bandwidth-delay_product). TCP
+can increase the window size of to 1'073'725'440 and is measured in bytes. LRP2P measures in packets, and a packet size
+of 1400 is assumed.
 
 To allow a 100Gibt/s over a sattelite link with 600ms RTT one has:
+
 ```
 100'000'000'000 x 0.6 / 8 = 7.5 GByte
 ```
-which means that 7.5GB can be in transit. The number of packets is ~5.3mio assuming packet size of 1400. Thus, 23bit would fit, and therefore we chose 24bit, 3 bytes to store the window size.
+
+which means that 7.5GB can be in transit. The number of packets is ~5.3mio assuming packet size of 1400. Thus, 23bit
+would fit, and therefore we chose 24bit, 3 bytes to store the window size.

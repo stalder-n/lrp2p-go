@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 import (
 	"crypto/rand"

@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 /*
  1. Listen on port xy -> PeerSocket (possibility to close, connect)
@@ -109,8 +109,8 @@ type Conn struct {
 	timeout      time.Duration
 }
 
-// PeerSocket is an ATP PeerSocket that can open a two-way connection to
-// another PeerSocket. Use atp.SocketConnect to create an instance.
+// PeerSocket is an LRP2P PeerSocket that can open a two-way connection to
+// another PeerSocket. Use lrp2p.SocketConnect to create an instance.
 type PeerSocket struct {
 	udp             *udpSocket
 	isReadWriting   bool

@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 import (
 	"github.com/stretchr/testify/suite"
@@ -6,7 +6,7 @@ import (
 )
 
 type SegmentTestSuite struct {
-	atpTestSuite
+	lrp2pTestSuite
 }
 
 func (suite *SegmentTestSuite) TestCreateSegment() {

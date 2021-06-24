@@ -1,4 +1,4 @@
-package atp
+package lrp2p
 
 import (
 	"github.com/stretchr/testify/suite"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type atpTestSuite struct {
+type lrp2pTestSuite struct {
 	suite.Suite
 	timestamp time.Time
 }
@@ -19,7 +19,7 @@ func init() {
 	testErrorChannel = make(chan error, 100)
 }
 
-func (suite *atpTestSuite) handleTestError(err error) {
+func (suite *lrp2pTestSuite) handleTestError(err error) {
 	if err != nil && len(testErrorChannel) > 0 {
 		suite.Errorf(err, "Error occurred")
 	}
